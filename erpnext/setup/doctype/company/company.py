@@ -88,6 +88,7 @@ class Company(NestedSet):
 		default_wip_warehouse: DF.Link | None
 		depreciation_cost_center: DF.Link | None
 		depreciation_expense_account: DF.Link | None
+		disable_sdbnb_in_sr: DF.Check
 		disposal_account: DF.Link | None
 		domain: DF.Data | None
 		email: DF.Data | None
@@ -122,6 +123,7 @@ class Company(NestedSet):
 		series_for_depreciation_entry: DF.Data | None
 		service_expense_account: DF.Link | None
 		stock_adjustment_account: DF.Link | None
+		stock_delivered_but_not_billed: DF.Link | None
 		stock_received_but_not_billed: DF.Link | None
 		submit_err_jv: DF.Check
 		tax_id: DF.Data | None
@@ -251,6 +253,7 @@ class Company(NestedSet):
 			["Default Expense Account", "default_expense_account"],
 			["Default Income Account", "default_income_account"],
 			["Stock Received But Not Billed Account", "stock_received_but_not_billed"],
+			["Stock Delivered But Not Billed Account", "stock_delivered_but_not_billed"],
 			["Stock Adjustment Account", "stock_adjustment_account"],
 			["Write Off Account", "write_off_account"],
 			["Default Payment Discount Account", "default_discount_account"],
@@ -632,6 +635,7 @@ class Company(NestedSet):
 			default_accounts.update(
 				{
 					"stock_received_but_not_billed": "Stock Received But Not Billed",
+					"stock_delivered_but_not_billed": "Stock Delivered But Not Billed",
 					"default_inventory_account": "Stock",
 					"stock_adjustment_account": "Stock Adjustment",
 				}
