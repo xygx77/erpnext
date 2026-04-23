@@ -298,7 +298,7 @@ erpnext.financial_statements = {
 		let fiscal_year = erpnext.utils.get_fiscal_year(frappe.datetime.get_today());
 		var filters = report.get_values();
 
-		if (!filters.period_start_date || !filters.period_end_date) {
+		if (fiscal_year && (!filters.period_start_date || !filters.period_end_date)) {
 			frappe.model.with_doc("Fiscal Year", fiscal_year, function (r) {
 				var fy = frappe.model.get_doc("Fiscal Year", fiscal_year);
 				frappe.query_report.set_filter_value({
