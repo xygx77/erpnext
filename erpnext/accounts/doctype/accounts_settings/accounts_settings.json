@@ -708,7 +708,7 @@
    "label": "Fetch Payment Schedule In Payment Request"
   },
   {
-    "fieldname": "repost_section",
+   "fieldname": "repost_section",
    "fieldtype": "Section Break",
    "label": "Repost"
   },
