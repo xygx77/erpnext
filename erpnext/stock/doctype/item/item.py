@@ -196,7 +196,7 @@ class Item(Document):
 				)
 				frappe.msgprint(
 					_(
-						"Opening stock creation has been queued and will be created in the background. Please check the stock entry after some time."
+						"Opening stock creation has been queued and will be created in the background. Please check the Stock Reconciliation after some time."
 					),
 					indicator="orange",
 					alert=True,
@@ -302,11 +302,7 @@ class Item(Document):
 
 	def set_opening_stock(self):
 		"""set opening stock"""
-		if (
-			not self.is_stock_item
-			or (self.has_serial_no and not self.serial_no_series)
-			or (self.has_batch_no and (not self.create_new_batch or not self.batch_number_series))
-		):
+		if not self.is_stock_item or self.has_serial_no or self.has_batch_no:
 			return
 
 		if self.valuation_rate is None and not self.is_customer_provided_item:
@@ -326,20 +322,19 @@ class Item(Document):
 					"Warehouse", {"warehouse_name": _("Stores"), "company": default.company}
 				)
 
-			opening_account = frappe.db.get_value(
-				"Account",
-				{"company": default.company, "account_type": "Temporary", "is_group": 0},
-				"name",
-			)
-
-			if not opening_account:
-				frappe.throw(
-					_(
-						"Please set a Temporary Opening account for company {0} to create an Opening Stock entry."
-					).format(frappe.bold(default.company))
+			if default_warehouse:
+				opening_account = frappe.db.get_value(
+					"Account",
+					{"company": default.company, "account_type": "Temporary", "is_group": 0},
+					"name",
 				)
 
-			if default_warehouse:
+				if not opening_account:
+					frappe.throw(
+						_(
+							"Please set a Temporary Opening account for company {0} to create an Opening Stock entry."
+						).format(frappe.bold(default.company))
+					)
 				stock_reco = frappe.get_doc(
 					{
 						"doctype": "Stock Reconciliation",
