@@ -122,10 +122,10 @@ class ManufactureEntry:
 			if backflush_based_on != "BOM":
 				available_serial_batches = self.get_transferred_serial_batches()
 
-			items_list = []
 			for item_code, _dict in item_dict.items():
 				_dict.from_warehouse = self.source_wh.get(item_code) or self.wip_warehouse
 				_dict.to_warehouse = ""
+				_dict.item_code = item_code
 
 				if backflush_based_on != "BOM" and not frappe.db.get_value(
 					"Job Card", self.job_card, "skip_material_transfer"
@@ -139,9 +139,7 @@ class ManufactureEntry:
 					_dict.qty = calculated_qty
 					self.update_available_serial_batches(_dict, available_serial_batches)
 
-				items_list.append(_dict)
-
-			self.stock_entry.append("items", items_list)
+				self.stock_entry.append("items", _dict)
 
 	def parse_available_serial_batches(self, item_dict, available_serial_batches):
 		key = (item_dict.item_code, item_dict.from_warehouse)

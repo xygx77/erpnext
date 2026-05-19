@@ -372,8 +372,9 @@ class SubcontractingInwardOrder(SubcontractingController):
 			items_dict = {
 				rm_item.get("rm_item_code"): {
 					"scio_detail": rm_item.get("name"),
+					"item_code": rm_item.get("rm_item_code"),
 					"qty": calculate_qty_as_per_bom(rm_item),
-					"to_warehouse": rm_item.get("warehouse"),
+					"t_warehouse": rm_item.get("warehouse"),
 					"stock_uom": rm_item.get("stock_uom"),
 				}
 			}
@@ -413,8 +414,9 @@ class SubcontractingInwardOrder(SubcontractingController):
 			items_dict = {
 				rm_item.get("rm_item_code"): {
 					"scio_detail": rm_item.get("name"),
+					"item_code": rm_item.get("rm_item_code"),
 					"qty": rm_item.received_qty - rm_item.work_order_qty - rm_item.returned_qty,
-					"from_warehouse": rm_item.get("warehouse"),
+					"s_warehouse": rm_item.get("warehouse"),
 					"stock_uom": rm_item.get("stock_uom"),
 				}
 			}
@@ -465,7 +467,8 @@ class SubcontractingInwardOrder(SubcontractingController):
 			items_dict = {
 				fg_item.item_code: {
 					"qty": qty,
-					"from_warehouse": fg_item.delivery_warehouse,
+					"item_code": fg_item.item_code,
+					"s_warehouse": fg_item.delivery_warehouse,
 					"stock_uom": fg_item.stock_uom,
 					"scio_detail": fg_item.name,
 					"is_finished_item": 1,
@@ -490,7 +493,8 @@ class SubcontractingInwardOrder(SubcontractingController):
 					items_dict = {
 						secondary_item.item_code: {
 							"qty": secondary_item.produced_qty - secondary_item.delivered_qty,
-							"from_warehouse": secondary_item.warehouse,
+							"item_code": secondary_item.item_code,
+							"s_warehouse": secondary_item.warehouse,
 							"stock_uom": secondary_item.stock_uom,
 							"scio_detail": secondary_item.name,
 							"type": secondary_item.type,
@@ -536,6 +540,7 @@ class SubcontractingInwardOrder(SubcontractingController):
 			items_dict = {
 				fg_item.item_code: {
 					"qty": qty,
+					"item_code": fg_item.item_code,
 					"stock_uom": fg_item.stock_uom,
 					"scio_detail": fg_item.name,
 					"is_finished_item": 1,

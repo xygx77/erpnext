@@ -2005,7 +2005,7 @@ def get_secondary_items_from_sub_assemblies(bom_no, company, qty, secondary_item
 def get_backflush_based_on(bom_no=None):
 	backflush_based_on = None
 	if bom_no:
-		backflush_based_on = frappe.get_cached_value("BOM", bom_no, "backflush_based_on")
+		backflush_based_on = frappe.db.get_value("BOM", bom_no, "backflush_based_on")
 
 	if not backflush_based_on:
 		backflush_based_on = frappe.db.get_single_value(

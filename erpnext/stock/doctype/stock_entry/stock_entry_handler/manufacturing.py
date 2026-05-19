@@ -97,10 +97,14 @@ class BaseManufactureStockEntry:
 		secondary_items = get_secondary_items(self.doc.bom_no, self.doc.work_order)
 		for row in secondary_items:
 			item_args = self.get_item_dict(row)
-			item_args["is_legacy_scrap_item"] = row.get("is_legacy") and row.type == "Scrap"
+			item_args["is_legacy_scrap_item"] = bool(row.get("is_legacy"))
 			item_args["type"] = row.type
 			item_args["bom_secondary_item"] = row.name
-			item_args["t_warehouse"] = self.doc.to_warehouse
+
+			if row.type == "Scrap" and self.wo_doc and self.wo_doc.get("scrap_warehouse"):
+				item_args["t_warehouse"] = self.wo_doc.scrap_warehouse
+			else:
+				item_args["t_warehouse"] = self.doc.to_warehouse
 
 			row.qty = row.qty * self.doc.fg_completed_qty
 			if row.get("process_loss_per"):
@@ -197,7 +201,7 @@ class BaseManufactureStockEntry:
 			row = frappe._dict({"serial_nos": serial_nos[0 : cint(item_details.qty)]})
 
 			_id = create_serial_and_batch_bundle(
-				self.se_doc,
+				self.doc,
 				row,
 				frappe._dict(
 					{
@@ -485,11 +489,13 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 		return alternative_items
 
 	def set_alternative_item_details(self, row, alternative_item_details):
-		if self.doc.work_order:
-			row.allow_alternative_item = self.wo_doc.allow_alternative_item
+		if self.doc.work_order and row.get("allow_alternative_item") is None:
+			row["allow_alternative_item"] = self.wo_doc.allow_alternative_item
 
-		if row.allow_alternative_item:
+		if row["allow_alternative_item"]:
+			original_item = row["item_code"]
 			row.update(alternative_item_details)
+			row["original_item"] = original_item
 
 	def add_raw_materials_based_on_transfer(self):
 		self.prepare_available_materials_based_on_transfer()
@@ -504,18 +510,46 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 		for row in self.available_materials:
 			row = self.available_materials[row]
 			item_args = self.get_item_dict(row)
-			qty = (flt(row.qty) * flt(self.doc.fg_completed_qty)) / pending_qty_to_mfg
+			if not self.doc.get("is_return"):
+				qty = (flt(row.qty) * flt(self.doc.fg_completed_qty)) / pending_qty_to_mfg
+			else:
+				qty = row.qty
+
 			item_args["qty"] = ceil_qty_if_uom_has_whole_number(qty, row.uom)
 			item_args["transfer_qty"] = item_args["qty"]
-			if row.serial_nos or (row.batches and len(row.batches) == 1):
-				item_args["serial_no"] = row.serial_nos[0 : cint(qty)]
-				item_args["batch_no"] = next(iter(row.batches.values()))
-				if not item_args["uom"]:
-					item_args["uom"] = row.stock_uom
 
+			if not self.doc.get("is_return"):
+				item_args["t_warehouse"] = None
+				item_args["s_warehouse"] = row.warehouse
+			else:
+				# In case of return, source and target warehouse will be swapped
+				item_args["s_warehouse"] = row.s_warehouse
+				item_args["t_warehouse"] = row.t_warehouse
+
+			if row.serial_nos or row.batches:
+				self.assign_serial_batches_to_materials(item_args, row, qty)
+			else:
 				self.doc.append("items", item_args)
-			elif row.batches:
-				self.split_items_based_on_batches(qty, item_args, row)
+
+	def assign_serial_batches_to_materials(self, item_args, row, qty):
+		if row.serial_nos:
+			if serial_nos := row.serial_nos[0 : cint(qty)]:
+				item_args["serial_no"] = "\n".join(serial_nos)
+
+			if not item_args["uom"]:
+				item_args["uom"] = row.stock_uom
+
+			item_args["use_serial_batch_fields"] = 1
+			self.doc.append("items", item_args)
+		elif row.batches and len(row.batches) == 1:
+			item_args["batch_no"] = next(iter(row.batches.keys()))
+			if not item_args["uom"]:
+				item_args["uom"] = row.stock_uom
+
+			item_args["use_serial_batch_fields"] = 1
+			self.doc.append("items", item_args)
+		elif row.batches:
+			self.split_items_based_on_batches(qty, item_args, row)
 
 	def split_items_based_on_batches(self, qty, item_args, row):
 		for batch_no, batch_qty in row.batches.items():
@@ -533,7 +567,9 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 			if not item_args["uom"]:
 				item_args["uom"] = row.stock_uom
 
+			item_args["batch_no"] = batch_no
 			item_args["transfer_qty"] = item_args["qty"]
+			item_args["use_serial_batch_fields"] = 1
 
 			self.doc.append("items", item_args)
 
@@ -577,8 +613,8 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 			key = (row.item_code, row.warehouse)
 			if key not in self.available_materials:
 				self.available_materials[key] = frappe._dict(row)
-
-			self.available_materials[key].qty += row.qty
+			else:
+				self.available_materials[key].qty += row.qty
 
 			if row.serial_and_batch_bundle:
 				self.available_materials[key].update(self.get_sabb_details(row.serial_and_batch_bundle))
@@ -835,9 +871,19 @@ def get_bom_items(bom_no, use_multi_level_bom=None, qty=None, fetch_secondary_it
 			doctype.conversion_factor,
 		)
 	elif table_name == "BOM Item":
-		query = query.select(doctype.allow_alternative_item, doctype.uom, doctype.conversion_factor)
+		query = query.select(
+			doctype.allow_alternative_item, doctype.uom, doctype.conversion_factor, doctype.bom_no
+		)
 
-	return query.run(as_dict=1)
+	items = query.run(as_dict=1)
+	item_dict = {}
+	for item in items:
+		if item.item_code in item_dict:
+			item_dict[item.item_code].qty += item.qty
+		else:
+			item_dict[item.item_code] = item
+
+	return list(item_dict.values())
 
 
 def get_secondary_items(bom_no, work_order=None):
@@ -856,13 +902,12 @@ def get_secondary_items(bom_no, work_order=None):
 def get_secondary_items_from_sub_assemblies(bom_no):
 	items = []
 	bom_items = get_bom_items(bom_no)
-	items.extend(bom_items)
 	for row in bom_items:
 		if not row.bom_no:
 			continue
 
 		items.extend(get_bom_items(row.bom_no, qty=row.qty, fetch_secondary_items=True))
-		get_secondary_items_from_sub_assemblies(row.bom_no)
+		items.extend(get_secondary_items_from_sub_assemblies(row.bom_no))
 
 	return items
 

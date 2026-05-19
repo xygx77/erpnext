@@ -196,7 +196,6 @@ class StockEntryDetail(Document):
 			)
 
 	def set_actual_qty(self, posting_date, posting_time):
-		allow_negative_stock = is_negative_stock_allowed(item_code=self.item_code)
 		previous_sle = get_previous_sle(
 			{
 				"item_code": self.item_code,
@@ -208,33 +207,6 @@ class StockEntryDetail(Document):
 
 		# get actual stock at source warehouse
 		self.actual_qty = previous_sle.get("qty_after_transaction") or 0
-
-		# validate qty during submit
-		if (
-			self.docstatus == 1
-			and self.s_warehouse
-			and not allow_negative_stock
-			and flt(self.actual_qty, self.precision("actual_qty"))
-			< flt(self.transfer_qty, self.precision("actual_qty"))
-		):
-			frappe.throw(
-				_(
-					"Row {0}: Quantity not available for {4} in warehouse {1} at posting time of the entry ({2} {3})"
-				).format(
-					self.idx,
-					bold(self.s_warehouse),
-					formatdate(posting_date),
-					format_time(posting_time),
-					bold(self.item_code),
-				)
-				+ "<br><br>"
-				+ _("Available quantity is {0}, you need {1}").format(
-					bold(flt(self.actual_qty, self.precision("actual_qty"))),
-					bold(self.transfer_qty),
-				),
-				NegativeStockError,
-				title=_("Insufficient Stock"),
-			)
 
 	def delink_asset_repair_sabb(self, asset_repair):
 		if not self.serial_and_batch_bundle:

@@ -91,7 +91,7 @@ class SendToSubcontractorStockEntry:
 					)
 
 	def validate_subcontracting_order_for_transfer(self, child_row):
-		if not self.doc.subcontracted_item:
+		if not child_row.subcontracted_item:
 			frappe.throw(
 				_("Row {0}: Subcontracted Item is mandatory for the raw material {1}").format(
 					child_row.idx, bold(child_row.item_code)

@@ -684,7 +684,10 @@ class TestWorkOrder(ERPNextTestSuite):
 
 	def test_cost_center_for_manufacture(self):
 		wo_order = make_wo_order_test_record()
-		ste = make_stock_entry(wo_order.name, "Material Transfer for Manufacture", wo_order.qty)
+		ste = frappe.get_doc(
+			make_stock_entry(wo_order.name, "Material Transfer for Manufacture", wo_order.qty)
+		)
+		ste.save()
 		self.assertEqual(ste.get("items")[0].get("cost_center"), "_Test Cost Center - _TC")
 
 	def test_operation_time_with_batch_size(self):
@@ -1320,7 +1323,6 @@ class TestWorkOrder(ERPNextTestSuite):
 
 			stock_entry = frappe.get_doc(make_stock_entry(wo_order.name, "Manufacture", 10))
 			stock_entry.set_work_order_details()
-			ManufactureStockEntry(stock_entry).set_serial_nos_for_finished_good()
 			for row in stock_entry.items:
 				if row.item_code == fg_item:
 					self.assertTrue(row.serial_and_batch_bundle)
@@ -1361,7 +1363,6 @@ class TestWorkOrder(ERPNextTestSuite):
 
 			stock_entry = frappe.get_doc(make_stock_entry(wo_order.name, "Manufacture", 10))
 			stock_entry.set_work_order_details()
-			ManufactureStockEntry(stock_entry).set_serial_nos_for_finished_good()
 			for row in stock_entry.items:
 				if row.item_code == fg_item:
 					self.assertTrue(row.serial_and_batch_bundle)
@@ -4292,7 +4293,6 @@ class TestWorkOrder(ERPNextTestSuite):
 		)
 
 		material_transfer_entry.submit()
-
 		manufacture_entry = frappe.get_doc(make_stock_entry(wo_order.name, "Manufacture", 1))
 		manufacture_entry.save()
 

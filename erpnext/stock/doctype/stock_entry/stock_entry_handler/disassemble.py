@@ -62,7 +62,6 @@ class DisassembleStockEntry:
 					"docstatus": 1,
 				},
 				pluck="name",
-				limit_page_length=2,
 			)
 			if len(manufacture_entries) == 1:
 				self.doc.source_stock_entry = manufacture_entries[0]
@@ -200,6 +199,8 @@ class DisassembleStockEntry:
 			item_args["bom_secondary_item"] = row.get("name")
 
 			row.qty = row.qty * self.doc.fg_completed_qty
+			if row.get("process_loss_per"):
+				row.qty -= flt(row.qty * row.get("process_loss_per") / 100)
 			item_args["qty"] = ceil_qty_if_uom_has_whole_number(row.qty, item_args["uom"])
 
 			self.doc.append("items", item_args)
@@ -284,6 +285,10 @@ class DisassembleStockEntry:
 
 	def on_submit(self):
 		self.set_serial_batch_for_disassembly()
+		self.update_disassembled_order()
+
+	def on_cancel(self):
+		self.update_disassembled_order()
 
 	def set_serial_batch_for_disassembly(self):
 		if self.doc.get("source_stock_entry"):
@@ -387,6 +392,16 @@ class DisassembleStockEntry:
 
 		row.serial_and_batch_bundle = bundle_doc.name
 		row.use_serial_batch_fields = 0
+
+	def update_disassembled_order(self):
+		if not self.doc.work_order:
+			return
+
+		if self.doc.fg_completed_qty:
+			pro_doc = frappe.get_doc("Work Order", self.doc.work_order)
+			pro_doc.run_method(
+				"update_disassembled_qty", self.doc.fg_completed_qty, self.doc._action == "cancel"
+			)
 
 
 def get_available_materials(work_order, stock_entry_doc=None) -> dict:

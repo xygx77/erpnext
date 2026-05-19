@@ -255,6 +255,8 @@ class StockEntry(StockController, SubcontractingInwardController):
 		if self.se_handler_class and hasattr(self.se_handler_class, "before_validate"):
 			self.se_handler_class(self).before_validate()
 
+		self.set_default_cost_center()
+
 		apply_rule = self.apply_putaway_rule and (self.purpose in ["Material Transfer", "Material Receipt"])
 
 		if self.get("items") and apply_rule:
@@ -267,6 +269,17 @@ class StockEntry(StockController, SubcontractingInwardController):
 			for item in self.items:
 				if not item.project:
 					item.project = self.project
+
+	def set_default_cost_center(self):
+		for row in self.items:
+			if not row.cost_center:
+				row.cost_center = get_default_cost_center(
+					row,
+					row,
+					get_item_group_defaults(row.item_code, self.company),
+					get_brand_defaults(row.item_code, self.company),
+					self.company,
+				)
 
 	def validate(self):
 		if self.se_handler_class:
@@ -318,7 +331,6 @@ class StockEntry(StockController, SubcontractingInwardController):
 			self.se_handler_class(self).on_submit()
 
 		self.make_bundle_using_old_serial_batch_fields()
-		self.update_disassembled_order()
 		self.adjust_stock_reservation_entries_for_return()
 		self.update_stock_reservation_entries()
 		self.update_stock_ledger()
@@ -346,7 +358,6 @@ class StockEntry(StockController, SubcontractingInwardController):
 		if self.work_order and self.purpose == "Material Consumption for Manufacture":
 			self.validate_work_order_status()
 
-		self.update_disassembled_order()
 		self.cancel_stock_reservation_entries_for_inward()
 		self.update_stock_ledger()
 
@@ -1166,13 +1177,6 @@ class StockEntry(StockController, SubcontractingInwardController):
 			if self.work_order:
 				self._wo_doc = frappe.get_doc("Work Order", self.work_order)
 		return getattr(self, "_wo_doc", None)
-
-	def update_disassembled_order(self):
-		if not self.work_order:
-			return
-		if self.purpose == "Disassemble" and self.fg_completed_qty:
-			pro_doc = frappe.get_doc("Work Order", self.work_order)
-			pro_doc.run_method("update_disassembled_qty", self.fg_completed_qty, self._action == "cancel")
 
 	def make_stock_reserve_for_wip_and_fg(self):
 		if self.is_stock_reserve_for_work_order():

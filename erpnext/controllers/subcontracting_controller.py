@@ -1403,16 +1403,18 @@ def make_rm_stock_entry(
 							items_dict = {
 								rm_item_code: {
 									rm_detail_field: rm_item.get("name"),
+									"item_code": rm_item_code,
 									"item_name": rm_item.get("item_name")
 									or item_wh.get(rm_item_code, {}).get("item_name", ""),
 									"description": item_wh.get(rm_item_code, {}).get("description", ""),
 									"qty": qty,
-									"from_warehouse": rm_item.get("warehouse")
+									"s_warehouse": rm_item.get("warehouse")
 									or rm_item.get("reserve_warehouse"),
-									"to_warehouse": source_doc.supplier_warehouse,
+									"t_warehouse": source_doc.supplier_warehouse,
 									"stock_uom": rm_item.get("stock_uom"),
 									"serial_and_batch_bundle": rm_item.get("serial_and_batch_bundle"),
 									"main_item_code": fg_item_code,
+									"subcontracted_item": fg_item_code,
 									"allow_alternative_item": item_wh.get(rm_item_code, {}).get(
 										"allow_alternative_item"
 									),

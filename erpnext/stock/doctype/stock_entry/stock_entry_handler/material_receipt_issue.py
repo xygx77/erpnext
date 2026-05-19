@@ -17,9 +17,9 @@ class MaterialReceiptStockEntry:
 
 	def set_default_warehouse(self):
 		for row in self.doc.items:
+			row.s_warehouse = None
 			if not row.t_warehouse and self.doc.to_warehouse:
 				row.t_warehouse = self.doc.to_warehouse
-				row.s_warehouse = None
 
 	def validate_warehouse(self):
 		for row in self.doc.items:
@@ -33,9 +33,9 @@ class BaseMaterialIssueStockEntry:
 
 	def set_default_warehouse(self):
 		for row in self.doc.items:
+			row.t_warehouse = None
 			if not row.s_warehouse and self.doc.from_warehouse:
 				row.s_warehouse = self.doc.from_warehouse
-				row.t_warehouse = None
 
 	def validate_warehouse(self):
 		for row in self.doc.items:

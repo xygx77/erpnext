@@ -2087,8 +2087,9 @@ class WorkOrder(Document):
 
 		additional_items = frappe._dict()
 		for row in stock_entry.items:
-			if row.item_code not in required_items:
-				additional_items.setdefault(row.item_code, []).append(row)
+			item_code = row.original_item if row.original_item else row.item_code
+			if item_code not in required_items:
+				additional_items.setdefault(item_code, []).append(row)
 
 		self.flags.ignore_validate_update_after_submit = True
 

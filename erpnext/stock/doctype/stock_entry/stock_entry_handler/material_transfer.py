@@ -131,6 +131,14 @@ class MaterialTransferForManufactureStockEntry(BaseMaterialTransferStockEntry):
 					title=_("Missing Item"),
 				)
 
+	def get_matched_items(self, item_code):
+		items = [item for item in self.doc.items if item.s_warehouse]
+		for row in items:
+			if row.item_code == item_code or row.original_item == item_code:
+				return row
+
+		return {}
+
 	def add_items(self):
 		item_dict = self.get_pending_raw_materials()
 		if self.doc.to_warehouse and self.wo_doc:
@@ -188,6 +196,10 @@ class MaterialTransferForManufactureStockEntry(BaseMaterialTransferStockEntry):
 				item_dict[item]["qty"] = pending_to_issue
 			else:
 				item_dict[item]["qty"] = 0
+
+			item_dict[item]["transfer_qty"] = flt(item_dict[item]["qty"]) * flt(
+				item_dict[item].get("conversion_factor") or 1
+			)
 
 		# delete items with 0 qty
 		list_of_items = list(item_dict.keys())
