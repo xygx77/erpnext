@@ -89,6 +89,20 @@ class MaterialTransferStockEntry(BaseMaterialTransferStockEntry):
 		self.validate_warehouse()
 		self.validate_same_source_target_warehouse()
 
+	def on_submit(self):
+		self.update_subcontract_order_supplied_items()
+
+	def on_cancel(self):
+		self.update_subcontract_order_supplied_items()
+
+	def update_subcontract_order_supplied_items(self):
+		if not self.doc.get(self.doc.subcontract_data.order_field):
+			return
+
+		from .subcontracting import SendToSubcontractorStockEntry
+
+		SendToSubcontractorStockEntry(self.doc).update_subcontract_order_supplied_items()
+
 
 class MaterialTransferForManufactureStockEntry(BaseMaterialTransferStockEntry):
 	def before_validate(self):
@@ -141,9 +155,10 @@ class MaterialTransferForManufactureStockEntry(BaseMaterialTransferStockEntry):
 
 	def add_items(self):
 		item_dict = self.get_pending_raw_materials()
-		if self.doc.to_warehouse and self.wo_doc:
-			for item in item_dict.values():
-				item["s_warehouse"] = item.get("from_warehouse")
+
+		for item in item_dict.values():
+			item["s_warehouse"] = item.get("from_warehouse")
+			if self.wo_doc and not item.get("t_warehouse"):
 				item["t_warehouse"] = self.wo_doc.wip_warehouse
 
 		for item_code in item_dict:
@@ -362,7 +377,7 @@ class MaterialRequestStockEntry(BaseMaterialTransferStockEntry):
 
 			if mreq_item.item_code != row.item_code:
 				frappe.throw(
-					_("Item for row {0} does not match Material Request").format(self.idx),
+					_("Item for row {0} does not match Material Request").format(row.idx),
 					frappe.MappingMismatchError,
 				)
 

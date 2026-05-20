@@ -75,7 +75,7 @@ class SendToSubcontractorStockEntry:
 					self.doc.get(self.doc.subcontract_data.order_field),
 				)
 			)
-		elif not self.doc.get(self.doc.subcontract_data.rm_detail_field):
+		elif not child_row.get(self.doc.subcontract_data.rm_detail_field):
 			order_rm_detail = self.get_order_rm_detail(child_row)
 			if order_rm_detail:
 				child_row.db_set(self.doc.subcontract_data.rm_detail_field, order_rm_detail)
@@ -97,7 +97,7 @@ class SendToSubcontractorStockEntry:
 					child_row.idx, bold(child_row.item_code)
 				)
 			)
-		elif not self.doc.get(self.doc.subcontract_data.rm_detail_field):
+		elif not child_row.get(self.doc.subcontract_data.rm_detail_field):
 			order_rm_detail = self.get_order_rm_detail(child_row)
 			if order_rm_detail:
 				child_row.db_set(self.doc.subcontract_data.rm_detail_field, order_rm_detail)

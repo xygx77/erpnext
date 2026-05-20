@@ -421,7 +421,9 @@ class SubcontractingInwardOrder(SubcontractingController):
 				}
 			}
 
-			stock_entry.append("items", items_dict[rm_item.get("rm_item_code")])
+			ste_item = items_dict[rm_item.get("rm_item_code")]
+			if ste_item.get("qty"):
+				stock_entry.append("items", ste_item)
 
 		if target_doc:
 			return stock_entry
