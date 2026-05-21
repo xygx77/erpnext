@@ -1,17 +1,13 @@
 import frappe
-from frappe import _, bold
+from frappe import _
 from frappe.query_builder.functions import Sum
-from frappe.utils import cstr, flt, get_link_to_form
+from frappe.utils import cstr, flt
 
-from erpnext.manufacturing.doctype.bom.bom import get_backflush_based_on
+from .base import BaseStockEntry
+from .manufacturing import _check_bom_component_qty, get_bom_items
 
-from .manufacturing import get_bom_items
 
-
-class BaseMaterialTransferStockEntry:
-	def __init__(self, se_doc):
-		self.doc = se_doc
-
+class BaseMaterialTransferStockEntry(BaseStockEntry):
 	def set_default_warehouse(self):
 		for row in self.doc.items:
 			if not row.t_warehouse and self.doc.to_warehouse:
@@ -69,17 +65,6 @@ class BaseMaterialTransferStockEntry:
 							title=_("Invalid Source and Target Warehouse"),
 						)
 
-	@property
-	def wo_doc(self):
-		if not getattr(self, "_wo_doc", None):
-			if self.doc.work_order:
-				self._wo_doc = frappe.get_doc("Work Order", self.doc.work_order)
-		return getattr(self, "_wo_doc", None)
-
-	@property
-	def backflush_based_on(self):
-		return get_backflush_based_on(self.doc.bom_no)
-
 
 class MaterialTransferStockEntry(BaseMaterialTransferStockEntry):
 	def before_validate(self):
@@ -120,38 +105,7 @@ class MaterialTransferForManufactureStockEntry(BaseMaterialTransferStockEntry):
 		if not self.doc.fg_completed_qty:
 			return
 
-		precision = frappe.get_precision("Stock Entry Detail", "qty")
-		bom_items = get_bom_items(self.doc.bom_no, self.doc.use_multi_level_bom)
-
-		for row in bom_items:
-			row.qty = row.qty * self.doc.fg_completed_qty
-			if matched_item := self.get_matched_items(row.item_code):
-				if flt(row.qty, precision) != flt(matched_item.qty, precision):
-					frappe.throw(
-						_(
-							"For the item {0}, the consumed quantity should be {1} according to the BOM {2}."
-						).format(
-							bold(row.item_code),
-							flt(row.qty),
-							get_link_to_form("BOM", self.doc.bom_no),
-						),
-						title=_("Incorrect Component Quantity"),
-					)
-			else:
-				frappe.throw(
-					_("According to the BOM {0}, the Item '{1}' is missing in the stock entry.").format(
-						get_link_to_form("BOM", self.doc.bom_no), bold(row.item_code)
-					),
-					title=_("Missing Item"),
-				)
-
-	def get_matched_items(self, item_code):
-		items = [item for item in self.doc.items if item.s_warehouse]
-		for row in items:
-			if row.item_code == item_code or row.original_item == item_code:
-				return row
-
-		return {}
+		_check_bom_component_qty(self.doc, get_bom_items(self.doc.bom_no, self.doc.use_multi_level_bom))
 
 	def add_items(self):
 		item_dict = self.get_pending_raw_materials()
@@ -305,24 +259,13 @@ class MaterialTransferForManufactureStockEntry(BaseMaterialTransferStockEntry):
 		self.update_job_card_and_work_order()
 
 	def update_job_card_and_work_order(self):
-		def _validate_work_order(pro_doc):
-			msg, title = "", ""
-			if flt(pro_doc.docstatus) != 1:
-				msg = _("Work Order {0} must be submitted").format(self.doc.work_order)
-
-			if pro_doc.status == "Stopped":
-				msg = _("Transaction not allowed against stopped Work Order {0}").format(self.doc.work_order)
-
-			if msg:
-				frappe.throw(_(msg), title=title)
-
 		if self.doc.job_card:
 			job_doc = frappe.get_doc("Job Card", self.doc.job_card)
 			job_doc.set_transferred_qty(update_status=True)
 			job_doc.set_transferred_qty_in_job_card_item(self.doc)
 
 		if self.doc.work_order:
-			_validate_work_order(self.wo_doc)
+			self._validate_work_order()
 
 			if self.doc.fg_completed_qty:
 				if self.doc.docstatus == 1:

@@ -1,15 +1,17 @@
+import json
+
 import frappe
 from frappe import _, bold
+from frappe.model.document import Document
 from frappe.query_builder.functions import Sum
 from frappe.utils import flt
 
 from erpnext.stock.utils import get_bin
 
+from .base import BaseStockEntry
 
-class SendToSubcontractorStockEntry:
-	def __init__(self, se_doc):
-		self.doc = se_doc
 
+class SendToSubcontractorStockEntry(BaseStockEntry):
 	def validate(self):
 		self.validate_subcontract_order()
 
@@ -241,3 +243,18 @@ def get_supplied_items(
 		supplied_item.total_supplied_qty = flt(supplied_item.supplied_qty) - flt(supplied_item.returned_qty)
 
 	return supplied_item_details
+
+
+@frappe.whitelist()
+def get_items_from_subcontract_order(source_name: str, target_doc: str | Document | None = None):
+	from erpnext.controllers.subcontracting_controller import make_rm_stock_entry
+
+	if isinstance(target_doc, str):
+		target_doc = frappe.get_doc(json.loads(target_doc))
+
+	order_doctype = "Purchase Order" if target_doc.purchase_order else "Subcontracting Order"
+	target_doc = make_rm_stock_entry(
+		subcontract_order=source_name, order_doctype=order_doctype, target_doc=target_doc
+	)
+
+	return target_doc

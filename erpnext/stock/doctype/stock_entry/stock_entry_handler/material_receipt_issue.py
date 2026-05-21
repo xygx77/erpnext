@@ -2,13 +2,11 @@ import frappe
 from frappe import _
 from frappe.query_builder.functions import Sum
 
+from .base import BaseStockEntry
 from .manufacturing import get_bom_items
 
 
-class MaterialReceiptStockEntry:
-	def __init__(self, se_doc):
-		self.doc = se_doc
-
+class MaterialReceiptStockEntry(BaseStockEntry):
 	def before_validate(self):
 		self.set_default_warehouse()
 
@@ -27,10 +25,7 @@ class MaterialReceiptStockEntry:
 				frappe.throw(_("Target Warehouse is required for item {0}").format(row.item_code))
 
 
-class BaseMaterialIssueStockEntry:
-	def __init__(self, se_doc):
-		self.doc = se_doc
-
+class BaseMaterialIssueStockEntry(BaseStockEntry):
 	def set_default_warehouse(self):
 		for row in self.doc.items:
 			row.t_warehouse = None
@@ -65,12 +60,12 @@ class MaterialIssueStockEntry(BaseMaterialIssueStockEntry):
 			self.doc.append("items", row)
 
 
-def get_consumed_items(self):
-	"""Get all raw materials consumed through consumption entries"""
+def get_consumed_items(work_order):
+	"""Get all raw materials consumed through consumption entries for a work order."""
 	parent = frappe.qb.DocType("Stock Entry")
 	child = frappe.qb.DocType("Stock Entry Detail")
 
-	query = (
+	return (
 		frappe.qb.from_(parent)
 		.join(child)
 		.on(parent.name == child.parent)
@@ -82,9 +77,7 @@ def get_consumed_items(self):
 		.where(
 			(parent.docstatus == 1)
 			& (parent.purpose == "Material Consumption for Manufacture")
-			& (parent.work_order == self.work_order)
+			& (parent.work_order == work_order)
 		)
 		.groupby(child.item_code, child.original_item)
-	)
-
-	return query.run(as_dict=True)
+	).run(as_dict=True)

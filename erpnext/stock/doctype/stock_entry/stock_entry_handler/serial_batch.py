@@ -8,11 +8,10 @@ from erpnext.manufacturing.doctype.bom.bom import get_backflush_based_on
 from erpnext.stock.serial_batch_bundle import SerialBatchCreation, get_serial_or_batch_items
 from erpnext.stock.utils import get_combine_datetime
 
+from .base import BaseStockEntry
 
-class StockEntrySABB:
-	def __init__(self, se_doc):
-		self.doc = se_doc
 
+class StockEntrySABB(BaseStockEntry):
 	def make_serial_and_batch_bundle_for_outward(self):
 		serial_or_batch_items = get_serial_or_batch_items(self.doc.items)
 		if not serial_or_batch_items:

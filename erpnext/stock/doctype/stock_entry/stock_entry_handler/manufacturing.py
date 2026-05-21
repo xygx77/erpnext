@@ -6,7 +6,7 @@ from frappe import _, bold
 from frappe.query_builder.functions import Sum
 from frappe.utils import ceil, cint, flt, get_link_to_form
 
-from erpnext.manufacturing.doctype.bom.bom import add_additional_cost, get_backflush_based_on
+from erpnext.manufacturing.doctype.bom.bom import add_additional_cost
 from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
 from erpnext.stock.serial_batch_bundle import (
 	SerialBatchCreation,
@@ -15,13 +15,11 @@ from erpnext.stock.serial_batch_bundle import (
 	get_serial_or_batch_items,
 )
 
+from .base import BaseStockEntry
 from .serial_batch import create_serial_and_batch_bundle
 
 
-class BaseManufactureStockEntry:
-	def __init__(self, se_doc):
-		self.doc = se_doc
-
+class BaseManufactureStockEntry(BaseStockEntry):
 	def set_default_warehouse(self):
 		for row in self.doc.items:
 			if (
@@ -63,17 +61,6 @@ class BaseManufactureStockEntry:
 				).format(bold(self.doc.purpose)),
 				title=_("Raw Materials Missing"),
 			)
-
-	@property
-	def wo_doc(self):
-		if not getattr(self, "_wo_doc", None):
-			if self.doc.work_order:
-				self._wo_doc = frappe.get_doc("Work Order", self.doc.work_order)
-		return getattr(self, "_wo_doc", None)
-
-	@property
-	def backflush_based_on(self):
-		return get_backflush_based_on(self.doc.bom_no)
 
 	def get_item_dict(self, row):
 		item_args = {}
@@ -148,23 +135,8 @@ class BaseManufactureStockEntry:
 				(flt(self.doc.process_loss_qty) / flt(self.doc.fg_completed_qty)) * 100
 			)
 
-	def get_production_item_details(self):
-		if self.doc.work_order:
-			production_item = frappe.get_cached_value("Work Order", self.doc.work_order, "production_item")
-		else:
-			production_item = frappe.get_cached_value("BOM", self.doc.bom_no, "item")
-
-		item_details = frappe.get_cached_value(
-			"Item",
-			production_item,
-			["item_name", "item_group", "description", "stock_uom", "name"],
-			as_dict=1,
-		)
-
-		return item_details
-
 	def add_finished_goods(self):
-		item_details = self.get_production_item_details()
+		item_details = get_production_item_details(self.doc.work_order, self.doc.bom_no)
 		fg_item_qty = flt(self.doc.fg_completed_qty) - flt(self.doc.process_loss_qty)
 
 		item_details.update(
@@ -321,38 +293,7 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 		if not rm_items:
 			return
 
-		precision = frappe.get_precision("Stock Entry Detail", "qty")
-		bom_items = get_bom_items(self.doc.bom_no, self.doc.use_multi_level_bom)
-
-		for row in bom_items:
-			row.qty = row.qty * self.doc.fg_completed_qty
-			if matched_item := self.get_matched_items(row.item_code):
-				if flt(row.qty, precision) != flt(matched_item.qty, precision):
-					frappe.throw(
-						_(
-							"For the item {0}, the consumed quantity should be {1} according to the BOM {2}."
-						).format(
-							bold(row.item_code),
-							flt(row.qty),
-							get_link_to_form("BOM", self.doc.bom_no),
-						),
-						title=_("Incorrect Component Quantity"),
-					)
-			else:
-				frappe.throw(
-					_("According to the BOM {0}, the Item '{1}' is missing in the stock entry.").format(
-						get_link_to_form("BOM", self.doc.bom_no), bold(row.item_code)
-					),
-					title=_("Missing Item"),
-				)
-
-	def get_matched_items(self, item_code):
-		items = [item for item in self.doc.items if item.s_warehouse]
-		for row in items:
-			if row.item_code == item_code or row.original_item == item_code:
-				return row
-
-		return {}
+		_check_bom_component_qty(self.doc, get_bom_items(self.doc.bom_no, self.doc.use_multi_level_bom))
 
 	def validate_work_order(self):
 		if not self.doc.work_order:
@@ -746,17 +687,6 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 		self.update_job_card_and_work_order()
 
 	def update_job_card_and_work_order(self):
-		def _validate_work_order(pro_doc):
-			msg, title = "", ""
-			if flt(pro_doc.docstatus) != 1:
-				msg = _("Work Order {0} must be submitted").format(self.doc.work_order)
-
-			if pro_doc.status == "Stopped":
-				msg = _("Transaction not allowed against stopped Work Order {0}").format(self.doc.work_order)
-
-			if msg:
-				frappe.throw(_(msg), title=title)
-
 		if self.doc.job_card:
 			job_doc = frappe.get_doc("Job Card", self.doc.job_card)
 			job_doc.set_consumed_qty_in_job_card_item(self.doc)
@@ -764,7 +694,7 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 			job_doc.update_work_order()
 
 		if self.doc.work_order:
-			_validate_work_order(self.wo_doc)
+			self._validate_work_order()
 
 			if self.doc.fg_completed_qty:
 				self.wo_doc.run_method("update_work_order_qty")
@@ -825,6 +755,55 @@ class MaterialConsumptionForManufactureStockEntry(ManufactureStockEntry):
 			self.add_raw_materials_based_on_work_order()
 		else:
 			self.add_raw_materials_based_on_transfer()
+
+
+def get_production_item_details(work_order=None, bom_no=None):
+	production_item = (
+		frappe.get_cached_value("Work Order", work_order, "production_item")
+		if work_order
+		else frappe.get_cached_value("BOM", bom_no, "item")
+	)
+	return frappe.get_cached_value(
+		"Item",
+		production_item,
+		["item_name", "item_group", "description", "stock_uom", "name"],
+		as_dict=1,
+	)
+
+
+def _check_bom_component_qty(doc, bom_items):
+	"""Validate that stock entry items match BOM quantities."""
+	precision = frappe.get_precision("Stock Entry Detail", "qty")
+	for row in bom_items:
+		row.qty = row.qty * doc.fg_completed_qty
+		matched_item = next(
+			(
+				item
+				for item in doc.items
+				if item.s_warehouse
+				and (item.item_code == row.item_code or item.original_item == row.item_code)
+			),
+			None,
+		)
+		if matched_item:
+			if flt(row.qty, precision) != flt(matched_item.qty, precision):
+				frappe.throw(
+					_(
+						"For the item {0}, the consumed quantity should be {1} according to the BOM {2}."
+					).format(
+						bold(row.item_code),
+						flt(row.qty),
+						get_link_to_form("BOM", doc.bom_no),
+					),
+					title=_("Incorrect Component Quantity"),
+				)
+		else:
+			frappe.throw(
+				_("According to the BOM {0}, the Item '{1}' is missing in the stock entry.").format(
+					get_link_to_form("BOM", doc.bom_no), bold(row.item_code)
+				),
+				title=_("Missing Item"),
+			)
 
 
 def get_bom_items(bom_no, use_multi_level_bom=None, qty=None, fetch_secondary_items=False):

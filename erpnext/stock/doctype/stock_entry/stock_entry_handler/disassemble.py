@@ -9,13 +9,16 @@ from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
 from erpnext.stock.serial_batch_bundle import SerialBatchCreation
 from erpnext.stock.utils import get_combine_datetime
 
-from .manufacturing import ceil_qty_if_uom_has_whole_number, get_bom_items, get_secondary_items
+from .base import BaseStockEntry
+from .manufacturing import (
+	ceil_qty_if_uom_has_whole_number,
+	get_bom_items,
+	get_production_item_details,
+	get_secondary_items,
+)
 
 
-class DisassembleStockEntry:
-	def __init__(self, se_doc):
-		self.doc = se_doc
-
+class DisassembleStockEntry(BaseStockEntry):
 	def validate(self):
 		self.validate_warehouse()
 
@@ -205,25 +208,8 @@ class DisassembleStockEntry:
 
 			self.doc.append("items", item_args)
 
-	def get_production_item_details(self):
-		if self.doc.work_order:
-			production_item = frappe.get_cached_value("Work Order", self.doc.work_order, "production_item")
-		else:
-			production_item = frappe.get_cached_value("BOM", self.doc.bom_no, "item")
-
-		item_details = frappe.get_cached_value(
-			"Item",
-			production_item,
-			["item_name", "item_group", "description", "stock_uom", "name"],
-			as_dict=1,
-		)
-
-		return item_details
-
 	def add_finished_goods(self):
-		# Fininshed good will be removed from source warehouse
-
-		item_details = self.get_production_item_details()
+		item_details = get_production_item_details(self.doc.work_order, self.doc.bom_no)
 
 		item_details.update(
 			{

@@ -1722,18 +1722,3 @@ def get_warehouse_details(args: str | dict):
 			"basic_rate": get_incoming_rate(args),
 		}
 	return ret
-
-
-@frappe.whitelist()
-def get_items_from_subcontract_order(source_name: str, target_doc: str | Document | None = None):
-	from erpnext.controllers.subcontracting_controller import make_rm_stock_entry
-
-	if isinstance(target_doc, str):
-		target_doc = frappe.get_doc(json.loads(target_doc))
-
-	order_doctype = "Purchase Order" if target_doc.purchase_order else "Subcontracting Order"
-	target_doc = make_rm_stock_entry(
-		subcontract_order=source_name, order_doctype=order_doctype, target_doc=target_doc
-	)
-
-	return target_doc
