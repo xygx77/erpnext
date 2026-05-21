@@ -112,50 +112,44 @@ class DisassembleStockEntry(BaseStockEntry):
 
 	def _append_disassembly_row_from_source(self, disassemble_qty, scale_factor):
 		for source_row in self.get_items_from_manufacture_stock_entry():
-			if source_row.is_finished_item:
-				qty = disassemble_qty
-				s_warehouse = self.doc.from_warehouse or source_row.t_warehouse
-				t_warehouse = ""
-			elif source_row.s_warehouse:
-				# RM: was consumed FROM s_warehouse -> return TO s_warehouse
-				qty = flt(source_row.qty * scale_factor)
-				s_warehouse = ""
-				t_warehouse = self.doc.to_warehouse or source_row.s_warehouse
-			else:
-				# Scrap/secondary: was produced TO t_warehouse -> take FROM t_warehouse
-				qty = flt(source_row.qty * scale_factor)
-				s_warehouse = source_row.t_warehouse
-				t_warehouse = ""
+			self._append_disassembly_item(source_row, disassemble_qty, scale_factor)
 
-			item = {
-				"item_code": source_row.item_code,
-				"item_name": source_row.item_name,
-				"description": source_row.description,
-				"stock_uom": source_row.stock_uom,
-				"uom": source_row.uom,
-				"conversion_factor": source_row.conversion_factor,
-				"basic_rate": source_row.basic_rate,
-				"qty": qty,
-				"s_warehouse": s_warehouse,
-				"t_warehouse": t_warehouse,
-				"is_finished_item": source_row.is_finished_item,
-				"type": source_row.type,
-				"is_legacy_scrap_item": source_row.is_legacy_scrap_item,
-				"bom_secondary_item": source_row.bom_secondary_item,
-				"bom_no": source_row.bom_no,
-				# batch and serial bundles built on submit
-				"use_serial_batch_fields": 1 if (source_row.batch_no or source_row.serial_no) else 0,
-			}
+	def _get_disassembly_warehouses(self, source_row, disassemble_qty, scale_factor):
+		if source_row.is_finished_item:
+			return disassemble_qty, self.doc.from_warehouse or source_row.t_warehouse, ""
+		elif source_row.s_warehouse:
+			return flt(source_row.qty * scale_factor), "", self.doc.to_warehouse or source_row.s_warehouse
+		else:
+			return flt(source_row.qty * scale_factor), source_row.t_warehouse, ""
 
-			if self.doc.source_stock_entry:
-				item.update(
-					{
-						"against_stock_entry": self.doc.source_stock_entry,
-						"ste_detail": source_row.name,
-					}
-				)
+	def _build_disassembly_item_dict(self, source_row, qty, s_warehouse, t_warehouse):
+		return {
+			"item_code": source_row.item_code,
+			"item_name": source_row.item_name,
+			"description": source_row.description,
+			"stock_uom": source_row.stock_uom,
+			"uom": source_row.uom,
+			"conversion_factor": source_row.conversion_factor,
+			"basic_rate": source_row.basic_rate,
+			"qty": qty,
+			"s_warehouse": s_warehouse,
+			"t_warehouse": t_warehouse,
+			"is_finished_item": source_row.is_finished_item,
+			"type": source_row.type,
+			"is_legacy_scrap_item": source_row.is_legacy_scrap_item,
+			"bom_secondary_item": source_row.bom_secondary_item,
+			"bom_no": source_row.bom_no,
+			"use_serial_batch_fields": 1 if (source_row.batch_no or source_row.serial_no) else 0,
+		}
 
-			self.doc.append("items", item)
+	def _append_disassembly_item(self, source_row, disassemble_qty, scale_factor):
+		qty, s_warehouse, t_warehouse = self._get_disassembly_warehouses(
+			source_row, disassemble_qty, scale_factor
+		)
+		item = self._build_disassembly_item_dict(source_row, qty, s_warehouse, t_warehouse)
+		if self.doc.source_stock_entry:
+			item.update({"against_stock_entry": self.doc.source_stock_entry, "ste_detail": source_row.name})
+		self.doc.append("items", item)
 
 	def _add_items_for_disassembly_from_bom(self):
 		if not self.doc.bom_no or not self.doc.fg_completed_qty:
@@ -291,70 +285,71 @@ class DisassembleStockEntry(BaseStockEntry):
 			frappe.db.get_value("Stock Entry", self.doc.source_stock_entry, "fg_completed_qty")
 		)
 		scale_factor = flt(self.doc.fg_completed_qty) / source_fg_qty if source_fg_qty else 0
-
 		bundle_data = get_voucher_wise_serial_batch_from_bundle(voucher_no=[self.doc.source_stock_entry])
 		source_rows_by_name = {r.name: r for r in self.get_items_from_manufacture_stock_entry()}
-
 		for row in self.doc.items:
 			if not row.ste_detail:
 				continue
-
 			source_row = source_rows_by_name.get(row.ste_detail)
-			if not source_row:
-				continue
+			if source_row:
+				self._apply_bundle_to_disassembly_row(row, source_row, bundle_data, scale_factor)
 
-			source_warehouse = source_row.s_warehouse or source_row.t_warehouse
-			key = (source_row.item_code, source_warehouse, self.doc.source_stock_entry)
-			source_bundle = bundle_data.get(key, {})
+	def _apply_bundle_to_disassembly_row(self, row, source_row, bundle_data, scale_factor):
+		source_warehouse = source_row.s_warehouse or source_row.t_warehouse
+		key = (source_row.item_code, source_warehouse, self.doc.source_stock_entry)
+		source_bundle = bundle_data.get(key, {})
+		batches = self._extract_batches(source_row, source_bundle, row, scale_factor)
+		serial_nos = self._extract_serial_nos(source_row, source_bundle, row)
+		self._set_serial_batch_bundle_for_disassembly_row(row, serial_nos, batches)
 
-			batches = defaultdict(float)
-			serial_nos = []
+	def _extract_batches(self, source_row, source_bundle, row, scale_factor):
+		batches = defaultdict(float)
+		if source_bundle.get("batch_nos"):
+			self._allocate_batches(batches, source_bundle["batch_nos"], row.transfer_qty, scale_factor)
+		elif source_row.batch_no:
+			batches[source_row.batch_no] = row.transfer_qty
+		return batches
 
-			if source_bundle.get("batch_nos"):
-				qty_remaining = row.transfer_qty
-				for batch_no, batch_qty in source_bundle["batch_nos"].items():
-					if qty_remaining <= 0:
-						break
-					alloc = min(abs(flt(batch_qty)) * scale_factor, qty_remaining)
-					batches[batch_no] = alloc
-					qty_remaining -= alloc
-			elif source_row.batch_no:
-				batches[source_row.batch_no] = row.transfer_qty
+	def _allocate_batches(self, batches, batch_nos, transfer_qty, scale_factor):
+		qty_remaining = transfer_qty
+		for batch_no, batch_qty in batch_nos.items():
+			if qty_remaining <= 0:
+				break
+			alloc = min(abs(flt(batch_qty)) * scale_factor, qty_remaining)
+			batches[batch_no] = alloc
+			qty_remaining -= alloc
 
-			if source_bundle.get("serial_nos"):
-				serial_nos = get_serial_nos(source_bundle["serial_nos"])[: int(row.transfer_qty)]
-			elif source_row.serial_no:
-				serial_nos = get_serial_nos(source_row.serial_no)[: int(row.transfer_qty)]
-
-			self._set_serial_batch_bundle_for_disassembly_row(row, serial_nos, batches)
+	def _extract_serial_nos(self, source_row, source_bundle, row):
+		if source_bundle.get("serial_nos"):
+			return get_serial_nos(source_bundle["serial_nos"])[: int(row.transfer_qty)]
+		elif source_row.serial_no:
+			return get_serial_nos(source_row.serial_no)[: int(row.transfer_qty)]
+		return []
 
 	def _set_serial_batch_for_disassembly_from_available_materials(self):
 		available_materials = get_available_materials(self.doc.work_order, self.doc)
 		for row in self.doc.items:
 			warehouse = row.s_warehouse or row.t_warehouse
 			materials = available_materials.get((row.item_code, warehouse))
-			if not materials:
-				continue
+			if materials:
+				self._apply_available_material_bundle(row, materials)
 
-			batches = defaultdict(float)
-			serial_nos = []
-			qty = row.transfer_qty
-			for batch_no, batch_qty in materials.batch_details.items():
-				if qty <= 0:
-					break
+	def _apply_available_material_bundle(self, row, materials):
+		batches = self._collect_available_batches(materials.batch_details, row.transfer_qty)
+		serial_nos = materials.serial_nos[: int(row.transfer_qty)] if materials.serial_nos else []
+		self._set_serial_batch_bundle_for_disassembly_row(row, serial_nos, batches)
 
-				batch_qty = abs(batch_qty)
-				if batch_qty <= qty:
-					batches[batch_no] = batch_qty
-					qty -= batch_qty
-				else:
-					batches[batch_no] = qty
-					qty = 0
-
-			if materials.serial_nos:
-				serial_nos = materials.serial_nos[: int(row.transfer_qty)]
-
-			self._set_serial_batch_bundle_for_disassembly_row(row, serial_nos, batches)
+	def _collect_available_batches(self, batch_details, transfer_qty):
+		batches, qty = defaultdict(float), transfer_qty
+		for batch_no, batch_qty in batch_details.items():
+			if qty <= 0:
+				break
+			batch_qty = abs(batch_qty)
+			if batch_qty <= qty:
+				batches[batch_no], qty = batch_qty, qty - batch_qty
+			else:
+				batches[batch_no], qty = qty, 0
+		return batches
 
 	def _set_serial_batch_bundle_for_disassembly_row(self, row, serial_nos, batches):
 		if not serial_nos and not batches:
@@ -392,145 +387,143 @@ class DisassembleStockEntry(BaseStockEntry):
 
 def get_available_materials(work_order, stock_entry_doc=None) -> dict:
 	data = get_stock_entry_data(work_order, stock_entry_doc=stock_entry_doc)
-
 	available_materials = {}
 	for row in data:
-		key = (row.item_code, row.warehouse)
-		if row.purpose != "Material Transfer for Manufacture":
-			key = (row.item_code, row.s_warehouse)
-
-		if stock_entry_doc and stock_entry_doc.purpose == "Disassemble":
-			key = (row.item_code, row.s_warehouse or row.warehouse)
-
+		key = _get_material_key(row, stock_entry_doc)
 		if key not in available_materials:
-			available_materials.setdefault(
-				key,
-				frappe._dict(
-					{"item_details": row, "batch_details": defaultdict(float), "qty": 0, "serial_nos": []}
-				),
+			available_materials[key] = frappe._dict(
+				{"item_details": row, "batch_details": defaultdict(float), "qty": 0, "serial_nos": []}
 			)
-
-		item_data = available_materials[key]
-
-		if row.purpose == "Material Transfer for Manufacture" or (
-			stock_entry_doc and stock_entry_doc.purpose == "Disassemble" and row.purpose == "Manufacture"
-		):
-			item_data.qty += row.qty
-			if row.batch_no:
-				item_data.batch_details[row.batch_no] += row.qty
-
-			elif row.batch_nos:
-				for batch_no, qty in row.batch_nos.items():
-					item_data.batch_details[batch_no] += qty
-
-			if row.serial_no:
-				item_data.serial_nos.extend(get_serial_nos(row.serial_no))
-				item_data.serial_nos.sort()
-
-			elif row.serial_nos:
-				item_data.serial_nos.extend(get_serial_nos(row.serial_nos))
-				item_data.serial_nos.sort()
-		else:
-			# Consume raw material qty in case of 'Manufacture' or 'Material Consumption for Manufacture'
-
-			item_data.qty -= row.qty
-			if row.batch_no:
-				item_data.batch_details[row.batch_no] -= row.qty
-
-			elif row.batch_nos:
-				for batch_no, qty in row.batch_nos.items():
-					item_data.batch_details[batch_no] += qty
-
-			if row.serial_no:
-				for serial_no in get_serial_nos(row.serial_no):
-					if serial_no in item_data.serial_nos:
-						item_data.serial_nos.remove(serial_no)
-
-			elif row.serial_nos:
-				for serial_no in get_serial_nos(row.serial_nos):
-					if serial_no in item_data.serial_nos:
-						item_data.serial_nos.remove(serial_no)
-
+		_update_material_qty(available_materials[key], row, stock_entry_doc)
 	return available_materials
 
 
+def _get_material_key(row, stock_entry_doc):
+	if stock_entry_doc and stock_entry_doc.purpose == "Disassemble":
+		return (row.item_code, row.s_warehouse or row.warehouse)
+	if row.purpose != "Material Transfer for Manufacture":
+		return (row.item_code, row.s_warehouse)
+	return (row.item_code, row.warehouse)
+
+
+def _update_material_qty(item_data, row, stock_entry_doc):
+	is_inward = row.purpose == "Material Transfer for Manufacture" or (
+		stock_entry_doc and stock_entry_doc.purpose == "Disassemble" and row.purpose == "Manufacture"
+	)
+	if is_inward:
+		_add_inward_material_qty(item_data, row)
+	else:
+		_deduct_consumed_material_qty(item_data, row)
+
+
+def _add_inward_material_qty(item_data, row):
+	item_data.qty += row.qty
+	if row.batch_no:
+		item_data.batch_details[row.batch_no] += row.qty
+	elif row.batch_nos:
+		for batch_no, qty in row.batch_nos.items():
+			item_data.batch_details[batch_no] += qty
+	_extend_serial_nos_from_row(item_data, row)
+
+
+def _extend_serial_nos_from_row(item_data, row):
+	sn = row.serial_no or row.serial_nos
+	if sn:
+		item_data.serial_nos.extend(get_serial_nos(sn))
+		item_data.serial_nos.sort()
+
+
+def _deduct_consumed_material_qty(item_data, row):
+	item_data.qty -= row.qty
+	if row.batch_no:
+		item_data.batch_details[row.batch_no] -= row.qty
+	elif row.batch_nos:
+		for batch_no, qty in row.batch_nos.items():
+			item_data.batch_details[batch_no] += qty
+	_remove_serial_nos_from_available(item_data, row)
+
+
+def _remove_serial_nos_from_available(item_data, row):
+	sn = row.serial_no or row.serial_nos
+	if not sn:
+		return
+	for serial_no in get_serial_nos(sn):
+		if serial_no in item_data.serial_nos:
+			item_data.serial_nos.remove(serial_no)
+
+
 def get_stock_entry_data(work_order, stock_entry_doc=None):
+	data = _run_stock_entry_query(work_order, stock_entry_doc)
+	if not data:
+		return []
+	_enrich_with_bundle_data(data, stock_entry_doc)
+	return data
+
+
+def _run_stock_entry_query(work_order, stock_entry_doc):
+	se = frappe.qb.DocType("Stock Entry")
+	sed = frappe.qb.DocType("Stock Entry Detail")
+	query = _build_stock_entry_base_query(se, sed, work_order)
+	query = _apply_stock_entry_purpose_filter(query, se, sed, stock_entry_doc)
+	return query.run(as_dict=1)
+
+
+def _build_stock_entry_base_query(se, sed, work_order):
+	return (
+		frappe.qb.from_(se)
+		.from_(sed)
+		.select(
+			sed.item_name,
+			sed.original_item,
+			sed.item_code,
+			sed.qty,
+			sed.t_warehouse.as_("warehouse"),
+			sed.s_warehouse.as_("s_warehouse"),
+			sed.description,
+			sed.stock_uom,
+			sed.expense_account,
+			sed.cost_center,
+			sed.serial_and_batch_bundle,
+			sed.batch_no,
+			sed.serial_no,
+			se.purpose,
+			se.name,
+		)
+		.where((se.name == sed.parent) & (se.work_order == work_order) & (se.docstatus == 1))
+		.orderby(se.creation, sed.item_code, sed.idx)
+	)
+
+
+def _apply_stock_entry_purpose_filter(query, se, sed, stock_entry_doc):
+	if stock_entry_doc and stock_entry_doc.purpose == "Disassemble":
+		query = query.where(se.purpose.isin(["Disassemble", "Manufacture"]))
+		return query.where(se.name != stock_entry_doc.name)
+	query = query.where(
+		se.purpose.isin(
+			["Manufacture", "Material Consumption for Manufacture", "Material Transfer for Manufacture"]
+		)
+	)
+	return query.where(sed.s_warehouse.isnotnull())
+
+
+def _enrich_with_bundle_data(data, stock_entry_doc):
 	from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
 		get_voucher_wise_serial_batch_from_bundle,
 	)
 
-	stock_entry = frappe.qb.DocType("Stock Entry")
-	stock_entry_detail = frappe.qb.DocType("Stock Entry Detail")
-
-	data = (
-		frappe.qb.from_(stock_entry)
-		.from_(stock_entry_detail)
-		.select(
-			stock_entry_detail.item_name,
-			stock_entry_detail.original_item,
-			stock_entry_detail.item_code,
-			stock_entry_detail.qty,
-			(stock_entry_detail.t_warehouse).as_("warehouse"),
-			(stock_entry_detail.s_warehouse).as_("s_warehouse"),
-			stock_entry_detail.description,
-			stock_entry_detail.stock_uom,
-			stock_entry_detail.expense_account,
-			stock_entry_detail.cost_center,
-			stock_entry_detail.serial_and_batch_bundle,
-			stock_entry_detail.batch_no,
-			stock_entry_detail.serial_no,
-			stock_entry.purpose,
-			stock_entry.name,
-		)
-		.where(
-			(stock_entry.name == stock_entry_detail.parent)
-			& (stock_entry.work_order == work_order)
-			& (stock_entry.docstatus == 1)
-		)
-		.orderby(stock_entry.creation, stock_entry_detail.item_code, stock_entry_detail.idx)
-	)
-
-	if stock_entry_doc and stock_entry_doc.purpose == "Disassemble":
-		data = data.where(
-			stock_entry.purpose.isin(
-				[
-					"Disassemble",
-					"Manufacture",
-				]
-			)
-		)
-
-		data = data.where(stock_entry.name != stock_entry_doc.name)
-	else:
-		data = data.where(
-			stock_entry.purpose.isin(
-				[
-					"Manufacture",
-					"Material Consumption for Manufacture",
-					"Material Transfer for Manufacture",
-				]
-			)
-		)
-
-		data = data.where(stock_entry_detail.s_warehouse.isnotnull())
-
-	data = data.run(as_dict=1)
-
-	if not data:
-		return []
-
 	voucher_nos = [row.get("name") for row in data if row.get("name")]
-	if voucher_nos:
-		bundle_data = get_voucher_wise_serial_batch_from_bundle(voucher_no=voucher_nos)
-		for row in data:
-			key = (row.item_code, row.warehouse, row.name)
-			if row.purpose != "Material Transfer for Manufacture":
-				key = (row.item_code, row.s_warehouse, row.name)
+	if not voucher_nos:
+		return
+	bundle_data = get_voucher_wise_serial_batch_from_bundle(voucher_no=voucher_nos)
+	for row in data:
+		key = _get_bundle_key(row, stock_entry_doc)
+		if bundle_data.get(key):
+			row.update(bundle_data.get(key))
 
-			if stock_entry_doc and stock_entry_doc.purpose == "Disassemble":
-				key = (row.item_code, row.s_warehouse or row.warehouse, row.name)
 
-			if bundle_data.get(key):
-				row.update(bundle_data.get(key))
-
-	return data
+def _get_bundle_key(row, stock_entry_doc):
+	if stock_entry_doc and stock_entry_doc.purpose == "Disassemble":
+		return (row.item_code, row.s_warehouse or row.warehouse, row.name)
+	if row.purpose != "Material Transfer for Manufacture":
+		return (row.item_code, row.s_warehouse, row.name)
+	return (row.item_code, row.warehouse, row.name)

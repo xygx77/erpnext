@@ -21,63 +21,61 @@ class StockEntrySABB(BaseStockEntry):
 		already_picked_serial_nos = []
 
 		for row in self.doc.items:
-			if row.use_serial_batch_fields:
+			if row.use_serial_batch_fields or not row.s_warehouse:
 				continue
-
-			if not row.s_warehouse:
-				continue
-
 			if row.item_code not in serial_or_batch_items:
 				continue
 
-			bundle_doc = None
-			if row.serial_and_batch_bundle and abs(row.transfer_qty) != abs(
-				frappe.get_cached_value("Serial and Batch Bundle", row.serial_and_batch_bundle, "total_qty")
-			):
-				bundle_doc = SerialBatchCreation(
-					{
-						"item_code": row.item_code,
-						"warehouse": row.s_warehouse,
-						"serial_and_batch_bundle": row.serial_and_batch_bundle,
-						"type_of_transaction": "Outward",
-						"ignore_serial_nos": already_picked_serial_nos,
-						"qty": row.transfer_qty * -1,
-					}
-				).update_serial_and_batch_entries(
-					serial_nos=serial_nos.get(row.name), batch_nos=batch_nos.get(row.name)
-				)
-			elif not row.serial_and_batch_bundle and frappe.get_single_value(
-				"Stock Settings", "auto_create_serial_and_batch_bundle_for_outward"
-			):
-				bundle_doc = SerialBatchCreation(
-					{
-						"item_code": row.item_code,
-						"warehouse": row.s_warehouse,
-						"posting_datetime": get_combine_datetime(
-							self.doc.posting_date, self.doc.posting_time
-						),
-						"voucher_type": self.doc.doctype,
-						"voucher_detail_no": row.name,
-						"qty": row.transfer_qty * -1,
-						"ignore_serial_nos": already_picked_serial_nos,
-						"type_of_transaction": "Outward",
-						"company": self.doc.company,
-						"do_not_submit": True,
-					}
-				).make_serial_and_batch_bundle(
-					serial_nos=serial_nos.get(row.name), batch_nos=batch_nos.get(row.name)
-				)
-
+			bundle_doc = self._create_or_update_bundle_for_row(
+				row, serial_nos, batch_nos, already_picked_serial_nos
+			)
 			if not bundle_doc:
 				continue
 
 			for entry in bundle_doc.entries:
-				if not entry.serial_no:
-					continue
-
-				already_picked_serial_nos.append(entry.serial_no)
+				if entry.serial_no:
+					already_picked_serial_nos.append(entry.serial_no)
 
 			row.serial_and_batch_bundle = bundle_doc.name
+
+	def _create_or_update_bundle_for_row(self, row, serial_nos, batch_nos, already_picked_serial_nos):
+		if row.serial_and_batch_bundle and abs(row.transfer_qty) != abs(
+			frappe.get_cached_value("Serial and Batch Bundle", row.serial_and_batch_bundle, "total_qty")
+		):
+			return SerialBatchCreation(
+				{
+					"item_code": row.item_code,
+					"warehouse": row.s_warehouse,
+					"serial_and_batch_bundle": row.serial_and_batch_bundle,
+					"type_of_transaction": "Outward",
+					"ignore_serial_nos": already_picked_serial_nos,
+					"qty": row.transfer_qty * -1,
+				}
+			).update_serial_and_batch_entries(
+				serial_nos=serial_nos.get(row.name), batch_nos=batch_nos.get(row.name)
+			)
+
+		if not row.serial_and_batch_bundle and frappe.get_single_value(
+			"Stock Settings", "auto_create_serial_and_batch_bundle_for_outward"
+		):
+			return SerialBatchCreation(
+				{
+					"item_code": row.item_code,
+					"warehouse": row.s_warehouse,
+					"posting_datetime": get_combine_datetime(self.doc.posting_date, self.doc.posting_time),
+					"voucher_type": self.doc.doctype,
+					"voucher_detail_no": row.name,
+					"qty": row.transfer_qty * -1,
+					"ignore_serial_nos": already_picked_serial_nos,
+					"type_of_transaction": "Outward",
+					"company": self.doc.company,
+					"do_not_submit": True,
+				}
+			).make_serial_and_batch_bundle(
+				serial_nos=serial_nos.get(row.name), batch_nos=batch_nos.get(row.name)
+			)
+
+		return None
 
 	def get_serial_nos_and_batches_from_sres(self, scio_detail, only_pending=True):
 		serial_nos, batch_nos = [], frappe._dict()
@@ -189,64 +187,67 @@ class StockEntrySABB(BaseStockEntry):
 
 			key = (d.item_code, d.s_warehouse)
 			if details := reservation_entries.get(key):
-				original_qty = d.qty
-				if batches := details.get("batch_no"):
-					for batch_no, qty in batches.items():
-						if original_qty <= 0:
-							break
-
-						if qty <= 0:
-							continue
-
-						if d.batch_no and original_qty > 0:
-							new_row = frappe.copy_doc(d)
-							new_row.name = None
-							new_row.batch_no = batch_no
-							new_row.qty = qty
-							new_row.idx = d.idx + 1
-							if new_row.batch_no and details.get("batchwise_sn"):
-								new_row.serial_no = "\n".join(
-									details.get("batchwise_sn")[new_row.batch_no][: cint(new_row.qty)]
-								)
-
-							new_items_to_add.append(new_row)
-							original_qty -= qty
-							batches[batch_no] -= qty
-
-						if qty >= d.qty and not d.batch_no:
-							d.batch_no = batch_no
-							batches[batch_no] -= d.qty
-							if d.batch_no and details.get("batchwise_sn"):
-								d.serial_no = "\n".join(
-									details.get("batchwise_sn")[d.batch_no][: cint(d.qty)]
-								)
-						elif not d.batch_no:
-							d.batch_no = batch_no
-							d.qty = qty
-							original_qty -= qty
-							batches[batch_no] = 0
-
-							if d.batch_no and details.get("batchwise_sn"):
-								d.serial_no = "\n".join(
-									details.get("batchwise_sn")[d.batch_no][: cint(d.qty)]
-								)
-
-				if details.get("serial_no"):
-					d.serial_no = "\n".join(details.get("serial_no")[: cint(d.qty)])
-
+				self._apply_batch_reservation_to_item(d, details, new_items_to_add)
 				d.use_serial_batch_fields = 1
 
 		for new_row in new_items_to_add:
 			self.doc.append("items", new_row)
 
+		self._sort_and_reindex_items()
+
+	def _apply_batch_reservation_to_item(self, d, details, new_items_to_add):
+		original_qty = d.qty
+		if batches := details.get("batch_no"):
+			original_qty = self._distribute_batches_to_item(
+				d, batches, details, new_items_to_add, original_qty
+			)
+		if details.get("serial_no"):
+			d.serial_no = "\n".join(details.get("serial_no")[: cint(d.qty)])
+
+	def _distribute_batches_to_item(self, d, batches, details, new_items_to_add, original_qty):
+		for batch_no, qty in batches.items():
+			if original_qty <= 0:
+				break
+			if qty <= 0:
+				continue
+			if d.batch_no:
+				original_qty, _ = self._make_overflow_batch_row(
+					d, batches, details, new_items_to_add, batch_no, qty, original_qty
+				)
+			else:
+				self._assign_batch_to_item(d, batches, details, batch_no, qty)
+		return original_qty
+
+	def _make_overflow_batch_row(self, d, batches, details, new_items_to_add, batch_no, qty, original_qty):
+		new_row = frappe.copy_doc(d)
+		new_row.name = None
+		new_row.batch_no = batch_no
+		new_row.qty = qty
+		new_row.idx = d.idx + 1
+		if new_row.batch_no and details.get("batchwise_sn"):
+			new_row.serial_no = "\n".join(details.get("batchwise_sn")[new_row.batch_no][: cint(new_row.qty)])
+		new_items_to_add.append(new_row)
+		batches[batch_no] -= qty
+		return original_qty - qty, new_row
+
+	def _assign_batch_to_item(self, d, batches, details, batch_no, qty):
+		if qty >= d.qty:
+			d.batch_no = batch_no
+			batches[batch_no] -= d.qty
+		else:
+			d.batch_no = batch_no
+			d.qty = qty
+			batches[batch_no] = 0
+		if d.batch_no and details.get("batchwise_sn"):
+			d.serial_no = "\n".join(details.get("batchwise_sn")[d.batch_no][: cint(d.qty)])
+
+	def _sort_and_reindex_items(self):
 		sorted_items = sorted(self.doc.items, key=lambda x: x.item_code)
 		if self.doc.purpose == "Manufacture":
 			# ensure finished item at last
 			sorted_items = sorted(sorted_items, key=lambda x: cstr(x.t_warehouse))
 
-		idx = 0
-		for row in sorted_items:
-			idx += 1
+		for idx, row in enumerate(sorted_items, start=1):
 			row.idx = idx
 
 		self.doc.set("items", sorted_items)
@@ -256,14 +257,17 @@ def create_serial_and_batch_bundle(parent_doc, row, child, type_of_transaction=N
 	item_details = frappe.get_cached_value(
 		"Item", child.item_code, ["has_serial_no", "has_batch_no"], as_dict=1
 	)
-
 	if not (item_details.has_serial_no or item_details.has_batch_no):
 		return
+	doc = _make_bundle_doc(parent_doc, child, type_of_transaction or "Inward")
+	_populate_bundle_entries(doc, row, child)
+	if not doc.entries:
+		return None
+	return doc.insert(ignore_permissions=True).name
 
-	if not type_of_transaction:
-		type_of_transaction = "Inward"
 
-	doc = frappe.get_doc(
+def _make_bundle_doc(parent_doc, child, type_of_transaction):
+	return frappe.get_doc(
 		{
 			"doctype": "Serial and Batch Bundle",
 			"voucher_type": "Stock Entry",
@@ -275,41 +279,45 @@ def create_serial_and_batch_bundle(parent_doc, row, child, type_of_transaction=N
 		}
 	)
 
+
+def _populate_bundle_entries(doc, row, child):
 	precision = frappe.get_precision("Stock Entry Detail", "qty")
 	if row.serial_nos and row.batches_to_be_consume:
-		doc.has_serial_no = 1
-		doc.has_batch_no = 1
-		batchwise_serial_nos = get_batchwise_serial_nos(child.item_code, row)
-		for batch_no, qty in row.batches_to_be_consume.items():
-			while flt(qty, precision) > 0:
-				qty -= 1
-				doc.append(
-					"entries",
-					{
-						"batch_no": batch_no,
-						"serial_no": batchwise_serial_nos.get(batch_no).pop(0),
-						"warehouse": row.warehouse,
-						"qty": -1,
-					},
-				)
-
+		_append_serial_batch_entries(doc, row, child, precision)
 	elif row.serial_nos:
 		doc.has_serial_no = 1
 		for serial_no in row.serial_nos:
 			doc.append("entries", {"serial_no": serial_no, "warehouse": row.warehouse, "qty": -1})
-
 	elif row.batches_to_be_consume:
-		precision = frappe.get_precision("Serial and Batch Entry", "qty")
-		doc.has_batch_no = 1
-		for batch_no, qty in row.batches_to_be_consume.items():
-			if flt(qty, precision) > 0:
-				qty = flt(qty, precision)
-				doc.append("entries", {"batch_no": batch_no, "warehouse": row.warehouse, "qty": qty * -1})
+		_append_batch_entries(doc, row)
 
-	if not doc.entries:
-		return None
 
-	return doc.insert(ignore_permissions=True).name
+def _append_serial_batch_entries(doc, row, child, precision):
+	doc.has_serial_no = 1
+	doc.has_batch_no = 1
+	batchwise_serial_nos = get_batchwise_serial_nos(child.item_code, row)
+	for batch_no, qty in row.batches_to_be_consume.items():
+		while flt(qty, precision) > 0:
+			qty -= 1
+			doc.append(
+				"entries",
+				{
+					"batch_no": batch_no,
+					"serial_no": batchwise_serial_nos.get(batch_no).pop(0),
+					"warehouse": row.warehouse,
+					"qty": -1,
+				},
+			)
+
+
+def _append_batch_entries(doc, row):
+	precision = frappe.get_precision("Serial and Batch Entry", "qty")
+	doc.has_batch_no = 1
+	for batch_no, qty in row.batches_to_be_consume.items():
+		if flt(qty, precision) > 0:
+			doc.append(
+				"entries", {"batch_no": batch_no, "warehouse": row.warehouse, "qty": flt(qty, precision) * -1}
+			)
 
 
 def get_batchwise_serial_nos(item_code, row):
@@ -329,24 +337,20 @@ def get_batchwise_serial_nos(item_code, row):
 
 @frappe.whitelist()
 def get_expired_batch_items():
-	from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import get_auto_batch_nos
-
 	expired_batches = get_expired_batches()
 	if not expired_batches:
 		return []
+	return _enrich_expired_batches_with_stock(expired_batches)
+
+
+def _enrich_expired_batches_with_stock(expired_batches):
+	from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import get_auto_batch_nos
 
 	expired_batches_stock = get_auto_batch_nos(
-		frappe._dict(
-			{
-				"batch_no": list(expired_batches.keys()),
-				"for_stock_levels": True,
-			}
-		)
+		frappe._dict({"batch_no": list(expired_batches.keys()), "for_stock_levels": True})
 	)
-
 	for row in expired_batches_stock:
 		row.update(expired_batches.get(row.batch_no))
-
 	return expired_batches_stock
 
 

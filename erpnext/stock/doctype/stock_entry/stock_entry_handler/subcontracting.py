@@ -34,21 +34,26 @@ class SendToSubcontractorStockEntry(BaseStockEntry):
 				self.validate_subcontracting_order_for_transfer(row)
 
 	def validate_subcontracting_order_for_bom(self, child_row, subcontract_order):
-		def get_required_qty(item_code):
-			return sum(
-				flt(d.required_qty) for d in subcontract_order.supplied_items if d.rm_item_code == item_code
-			)
-
-		qty_allowance = flt(frappe.db.get_single_value("Buying Settings", "over_transfer_allowance"))
 		item_code = child_row.original_item or child_row.item_code
-		required_qty = get_required_qty(item_code)
+		required_qty = self._get_required_qty_for_bom(item_code, child_row, subcontract_order)
+		qty_allowance = flt(frappe.db.get_single_value("Buying Settings", "over_transfer_allowance"))
+		total_allowed = required_qty + (required_qty * qty_allowance / 100)
+		self._validate_transfer_qty(child_row, item_code, total_allowed)
+		self._link_rm_detail_if_missing(child_row, item_code)
 
+	def _get_required_qty_for_bom(self, item_code, child_row, subcontract_order):
+		required_qty = sum(
+			flt(d.required_qty) for d in subcontract_order.supplied_items if d.rm_item_code == item_code
+		)
 		if not required_qty and child_row.allow_alternative_item:
 			original_item_code = frappe.get_value(
 				"Item Alternative", {"alternative_item_code": item_code}, "item_code"
 			)
-			required_qty = get_required_qty(original_item_code)
-
+			required_qty = sum(
+				flt(d.required_qty)
+				for d in subcontract_order.supplied_items
+				if d.rm_item_code == original_item_code
+			)
 		if not required_qty:
 			frappe.throw(
 				_("Item {0} not found in 'Raw Materials Supplied' table in {1} {2}").format(
@@ -57,14 +62,15 @@ class SendToSubcontractorStockEntry(BaseStockEntry):
 					self.doc.get(self.doc.subcontract_data.order_field),
 				)
 			)
+		return required_qty
 
-		total_allowed = required_qty + (required_qty * (qty_allowance / 100))
+	def _validate_transfer_qty(self, child_row, item_code, total_allowed):
 		total_supplied = self.get_total_supplied_qty(child_row)
-
-		total_returned = 0
-		if self.doc.subcontract_data.order_doctype == "Subcontracting Order":
-			total_returned = self.get_total_returned_qty(child_row)
-
+		total_returned = (
+			self.get_total_returned_qty(child_row)
+			if self.doc.subcontract_data.order_doctype == "Subcontracting Order"
+			else 0
+		)
 		if flt(
 			total_supplied + child_row.transfer_qty - total_returned, child_row.precision("transfer_qty")
 		) > flt(total_allowed, child_row.precision("transfer_qty")):
@@ -77,20 +83,21 @@ class SendToSubcontractorStockEntry(BaseStockEntry):
 					self.doc.get(self.doc.subcontract_data.order_field),
 				)
 			)
-		elif not child_row.get(self.doc.subcontract_data.rm_detail_field):
+
+	def _link_rm_detail_if_missing(self, child_row, item_code):
+		if not child_row.get(self.doc.subcontract_data.rm_detail_field):
 			order_rm_detail = self.get_order_rm_detail(child_row)
 			if order_rm_detail:
 				child_row.db_set(self.doc.subcontract_data.rm_detail_field, order_rm_detail)
-			else:
-				if not child_row.allow_alternative_item:
-					frappe.throw(
-						_("Row {0}# Item {1} not found in 'Raw Materials Supplied' table in {2} {3}").format(
-							child_row.idx,
-							item_code,
-							self.doc.subcontract_data.order_doctype,
-							self.doc.get(self.doc.subcontract_data.order_field),
-						)
+			elif not child_row.allow_alternative_item:
+				frappe.throw(
+					_("Row {0}# Item {1} not found in 'Raw Materials Supplied' table in {2} {3}").format(
+						child_row.idx,
+						item_code,
+						self.doc.subcontract_data.order_doctype,
+						self.doc.get(self.doc.subcontract_data.order_field),
 					)
+				)
 
 	def validate_subcontracting_order_for_transfer(self, child_row):
 		if not child_row.subcontracted_item:
@@ -106,46 +113,42 @@ class SendToSubcontractorStockEntry(BaseStockEntry):
 
 	def get_total_supplied_qty(self, child_row):
 		se = frappe.qb.DocType("Stock Entry")
-		se_detail = frappe.qb.DocType("Stock Entry Detail")
-
+		sed = frappe.qb.DocType("Stock Entry Detail")
+		order_filter = self._get_supplied_qty_order_filter(se, sed, child_row)
 		return (
 			frappe.qb.from_(se)
-			.inner_join(se_detail)
-			.on(se.name == se_detail.parent)
-			.select(Sum(se_detail.transfer_qty))
+			.inner_join(sed)
+			.on(se.name == sed.parent)
+			.select(Sum(sed.transfer_qty))
 			.where(
 				(se.purpose == "Send to Subcontractor")
 				& (se.docstatus == 1)
-				& (se_detail.item_code == child_row.item_code)
-				& (
-					(
-						(se.purchase_order == self.doc.purchase_order)
-						& (se_detail.po_detail == self.doc.po_detail)
-					)
-					if self.doc.subcontract_data.order_doctype == "Purchase Order"
-					else (
-						(se.subcontracting_order == self.doc.subcontracting_order)
-						& (se_detail.sco_rm_detail == child_row.sco_rm_detail)
-					)
-				)
+				& (sed.item_code == child_row.item_code)
+				& order_filter
 			)
 		).run()[0][0] or 0
 
+	def _get_supplied_qty_order_filter(self, se, sed, child_row):
+		if self.doc.subcontract_data.order_doctype == "Purchase Order":
+			return (se.purchase_order == self.doc.purchase_order) & (sed.po_detail == self.doc.po_detail)
+		return (se.subcontracting_order == self.doc.subcontracting_order) & (
+			sed.sco_rm_detail == child_row.sco_rm_detail
+		)
+
 	def get_total_returned_qty(self, child_row):
 		se = frappe.qb.DocType("Stock Entry")
-		se_detail = frappe.qb.DocType("Stock Entry Detail")
-
+		sed = frappe.qb.DocType("Stock Entry Detail")
 		return (
 			frappe.qb.from_(se)
-			.inner_join(se_detail)
-			.on(se.name == se_detail.parent)
-			.select(Sum(se_detail.transfer_qty))
+			.inner_join(sed)
+			.on(se.name == sed.parent)
+			.select(Sum(sed.transfer_qty))
 			.where(
 				(se.purpose == "Material Transfer")
 				& (se.docstatus == 1)
 				& (se.is_return == 1)
-				& (se_detail.item_code == child_row.item_code)
-				& (se_detail.sco_rm_detail == child_row.sco_rm_detail)
+				& (sed.item_code == child_row.item_code)
+				& (sed.sco_rm_detail == child_row.sco_rm_detail)
 				& (se.subcontracting_order == self.doc.subcontracting_order)
 			)
 		).run()[0][0] or 0
@@ -169,36 +172,37 @@ class SendToSubcontractorStockEntry(BaseStockEntry):
 	def update_subcontract_order_supplied_items(self):
 		if not self.doc.get(self.doc.subcontract_data.order_field):
 			return
+		order_supplied_items = self._get_order_supplied_items()
+		supplied_items = self._get_supplied_items_details()
+		self._update_supplied_items_in_order(order_supplied_items, supplied_items)
+		self._update_reserved_qty_for_subcontracting(order_supplied_items)
 
-		# Get Subcontract Order Supplied Items Details
-		order_supplied_items = frappe.db.get_all(
+	def _get_order_supplied_items(self):
+		return frappe.db.get_all(
 			self.doc.subcontract_data.order_supplied_items_field,
 			filters={"parent": self.doc.get(self.doc.subcontract_data.order_field)},
 			fields=["name", "rm_item_code", "reserve_warehouse"],
 		)
 
-		# Get Items Supplied in Stock Entries against Subcontract Order
-		supplied_items = get_supplied_items(
+	def _get_supplied_items_details(self):
+		return get_supplied_items(
 			self.doc.get(self.doc.subcontract_data.order_field),
 			self.doc.subcontract_data.rm_detail_field,
 			self.doc.subcontract_data.order_field,
 		)
 
+	def _update_supplied_items_in_order(self, order_supplied_items, supplied_items):
 		for row in order_supplied_items:
-			key, item = row.name, {}
-			if not supplied_items.get(key):
-				# no stock transferred against Subcontract Order Supplied Items row
-				item = {"supplied_qty": 0, "returned_qty": 0, "total_supplied_qty": 0}
-			else:
-				item = supplied_items.get(key)
-
+			item = supplied_items.get(row.name) or {
+				"supplied_qty": 0,
+				"returned_qty": 0,
+				"total_supplied_qty": 0,
+			}
 			frappe.db.set_value(self.doc.subcontract_data.order_supplied_items_field, row.name, item)
 
-		# RM Item-Reserve Warehouse Dict
+	def _update_reserved_qty_for_subcontracting(self, order_supplied_items):
 		item_wh = {x.get("rm_item_code"): x.get("reserve_warehouse") for x in order_supplied_items}
-
 		for d in self.doc.get("items"):
-			# Update reserved sub contracted quantity in bin based on Supplied Item Details and
 			item_code = d.get("original_item") or d.get("item_code")
 			reserve_warehouse = item_wh.get(item_code)
 			if not (reserve_warehouse and item_code):

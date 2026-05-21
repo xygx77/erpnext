@@ -119,130 +119,104 @@ class MaterialTransferForManufactureStockEntry(BaseMaterialTransferStockEntry):
 			self.doc.append("items", item_dict[item_code])
 
 	def get_pending_raw_materials(self):
-		"""
-		issue (item quantity) that is pending to issue or desire to transfer,
-		whichever is less
-		"""
+		"""Return pending raw material qty to transfer, capped at what's still needed."""
 		item_dict = self.get_work_order_required_items()
-
 		max_qty = flt(self.wo_doc.qty)
-
-		allow_overproduction = False
-		overproduction_percentage = flt(
-			frappe.db.get_single_value("Manufacturing Settings", "overproduction_percentage_for_work_order")
-		)
-
-		transfer_extra_materials_percentage = flt(
-			frappe.db.get_single_value("Manufacturing Settings", "transfer_extra_materials_percentage")
-		)
-
-		to_transfer_qty = flt(self.wo_doc.material_transferred_for_manufacturing) + flt(
-			self.doc.fg_completed_qty
-		)
-		transfer_limit_qty = max_qty + ((max_qty * overproduction_percentage) / 100)
-		if transfer_extra_materials_percentage:
-			transfer_limit_qty = max_qty + ((max_qty * transfer_extra_materials_percentage) / 100)
-
-		if transfer_limit_qty >= to_transfer_qty:
-			allow_overproduction = True
+		allow_overproduction = self._is_overproduction_allowed(max_qty)
 
 		for item, item_details in item_dict.items():
-			pending_to_issue = flt(item_details.required_qty) - flt(item_details.transferred_qty)
-			desire_to_transfer = flt(self.doc.fg_completed_qty) * flt(item_details.required_qty) / max_qty
-
-			if (
-				desire_to_transfer <= pending_to_issue
-				or (
-					desire_to_transfer > 0
-					and self.backflush_based_on == "Material Transferred for Manufacture"
-				)
-				or allow_overproduction
-			):
-				# "No need for transfer but qty still pending to transfer" case can occur
-				# when transferring multiple RM in different Stock Entries
-				item_dict[item]["qty"] = desire_to_transfer if (desire_to_transfer > 0) else pending_to_issue
-			elif pending_to_issue > 0:
-				item_dict[item]["qty"] = pending_to_issue
-			else:
-				item_dict[item]["qty"] = 0
-
+			item_dict[item]["qty"] = self._calculate_item_transfer_qty(
+				item_details, allow_overproduction, max_qty
+			)
 			item_dict[item]["transfer_qty"] = flt(item_dict[item]["qty"]) * flt(
 				item_dict[item].get("conversion_factor") or 1
 			)
 
-		# delete items with 0 qty
-		list_of_items = list(item_dict.keys())
-		for item in list_of_items:
-			if not item_dict[item]["qty"]:
-				del item_dict[item]
+		item_dict = {k: v for k, v in item_dict.items() if v["qty"]}
 
-		# show some message
-		if not len(item_dict):
-			frappe.msgprint(_("""All items have already been transferred for this Work Order."""))
+		if not item_dict:
+			frappe.msgprint(_("All items have already been transferred for this Work Order."))
 
 		return item_dict
 
-	def get_work_order_required_items(self):
-		"""
-		Gets Work Order Required Items only if Stock Entry purpose is **Material Transferred for Manufacture**.
-		"""
-		item_dict, job_card_items = frappe._dict(), []
-		work_order = self.wo_doc
-
-		consider_job_card = work_order.transfer_material_against == "Job Card" and self.doc.get("job_card")
-		if consider_job_card:
-			job_card_items = self.get_job_card_item_codes()
-
-		if not frappe.db.get_value("Warehouse", work_order.wip_warehouse, "is_group"):
-			wip_warehouse = work_order.wip_warehouse
-		else:
-			wip_warehouse = None
-
-		transfer_extra_materials_percentage = flt(
+	def _is_overproduction_allowed(self, max_qty):
+		overproduction_pct = flt(
+			frappe.db.get_single_value("Manufacturing Settings", "overproduction_percentage_for_work_order")
+		)
+		extra_materials_pct = flt(
 			frappe.db.get_single_value("Manufacturing Settings", "transfer_extra_materials_percentage")
 		)
+		to_transfer_qty = flt(self.wo_doc.material_transferred_for_manufacturing) + flt(
+			self.doc.fg_completed_qty
+		)
+		limit_pct = extra_materials_pct or overproduction_pct
+		transfer_limit_qty = max_qty + (max_qty * limit_pct / 100)
+		return transfer_limit_qty >= to_transfer_qty
 
+	def _calculate_item_transfer_qty(self, item_details, allow_overproduction, max_qty):
+		pending_to_issue = flt(item_details.required_qty) - flt(item_details.transferred_qty)
+		desire_to_transfer = flt(self.doc.fg_completed_qty) * flt(item_details.required_qty) / max_qty
+		can_transfer = (
+			desire_to_transfer <= pending_to_issue
+			or (desire_to_transfer > 0 and self.backflush_based_on == "Material Transferred for Manufacture")
+			or allow_overproduction
+		)
+		return _resolve_transfer_qty(desire_to_transfer, pending_to_issue, can_transfer)
+
+	def get_work_order_required_items(self):
+		"""Gets Work Order Required Items for Material Transfer for Manufacture."""
+		work_order = self.wo_doc
+		consider_job_card = work_order.transfer_material_against == "Job Card" and self.doc.get("job_card")
+		job_card_items = self.get_job_card_item_codes() if consider_job_card else []
+		wip_warehouse = self._resolve_wip_warehouse(work_order)
+		extra_pct = flt(
+			frappe.db.get_single_value("Manufacturing Settings", "transfer_extra_materials_percentage")
+		)
+		item_dict = frappe._dict()
 		for d in work_order.get("required_items"):
-			if consider_job_card and (d.item_code not in job_card_items):
-				continue
-
-			additional_qty = 0.0
-			if transfer_extra_materials_percentage:
-				additional_qty = transfer_extra_materials_percentage * flt(d.required_qty) / 100
-
-			transfer_pending = flt(d.required_qty) > flt(d.transferred_qty)
-			if additional_qty:
-				transfer_pending = (flt(d.required_qty) + additional_qty) > flt(d.transferred_qty)
-
-			can_transfer = transfer_pending or (
-				self.backflush_based_on == "Material Transferred for Manufacture"
+			self._add_required_item(
+				item_dict, d, consider_job_card, job_card_items, wip_warehouse, extra_pct, work_order
 			)
-
-			if not can_transfer:
-				continue
-
-			if d.include_item_in_manufacturing:
-				item_row = d.as_dict()
-				item_row["idx"] = len(item_dict) + 1
-
-				if consider_job_card:
-					job_card_item = frappe.db.get_value(
-						"Job Card Item", {"item_code": d.item_code, "parent": self.doc.get("job_card")}
-					)
-					item_row["job_card_item"] = job_card_item or None
-
-				if d.source_warehouse and not frappe.db.get_value(
-					"Warehouse", d.source_warehouse, "is_group"
-				):
-					item_row["from_warehouse"] = d.source_warehouse
-
-				item_row["to_warehouse"] = wip_warehouse
-				if item_row["allow_alternative_item"]:
-					item_row["allow_alternative_item"] = work_order.allow_alternative_item
-
-				item_dict.setdefault(d.item_code, item_row)
-
 		return item_dict
+
+	def _resolve_wip_warehouse(self, work_order):
+		if not frappe.db.get_value("Warehouse", work_order.wip_warehouse, "is_group"):
+			return work_order.wip_warehouse
+		return None
+
+	def _add_required_item(
+		self, item_dict, d, consider_job_card, job_card_items, wip_warehouse, extra_pct, work_order
+	):
+		if consider_job_card and d.item_code not in job_card_items:
+			return
+		additional_qty = extra_pct * flt(d.required_qty) / 100 if extra_pct else 0.0
+		transfer_pending = (
+			(flt(d.required_qty) + additional_qty) > flt(d.transferred_qty)
+			if additional_qty
+			else flt(d.required_qty) > flt(d.transferred_qty)
+		)
+		can_transfer = transfer_pending or self.backflush_based_on == "Material Transferred for Manufacture"
+		if not can_transfer or not d.include_item_in_manufacturing:
+			return
+		self._build_required_item_row(item_dict, d, consider_job_card, wip_warehouse, work_order)
+
+	def _build_required_item_row(self, item_dict, d, consider_job_card, wip_warehouse, work_order):
+		item_row = d.as_dict()
+		item_row["idx"] = len(item_dict) + 1
+		if consider_job_card:
+			item_row["job_card_item"] = self._get_job_card_item(d.item_code)
+		if d.source_warehouse and not frappe.db.get_value("Warehouse", d.source_warehouse, "is_group"):
+			item_row["from_warehouse"] = d.source_warehouse
+		item_row["to_warehouse"] = wip_warehouse
+		if item_row["allow_alternative_item"]:
+			item_row["allow_alternative_item"] = work_order.allow_alternative_item
+		item_dict.setdefault(d.item_code, item_row)
+
+	def _get_job_card_item(self, item_code):
+		return (
+			frappe.db.get_value("Job Card Item", {"item_code": item_code, "parent": self.doc.get("job_card")})
+			or None
+		)
 
 	def get_job_card_item_codes(self):
 		if not self.doc.get("job_card"):
@@ -389,68 +363,73 @@ class MaterialRequestStockEntry(BaseMaterialTransferStockEntry):
 		return stock_entries, child_list
 
 	def _bulk_update_transferred_qty(self, stock_entries, child_list):
-		from pypika import Case
-
 		sed = frappe.qb.DocType("Stock Entry Detail")
-		case_expr = Case()
-		for (parent, name), qty in stock_entries.items():
-			case_expr = case_expr.when((sed.parent == parent) & (sed.name == name), qty)
+		case_expr = self._build_case_expr(sed, stock_entries)
 		(
 			frappe.qb.update(sed)
 			.set(sed.transferred_qty, case_expr.else_(sed.transferred_qty))
 			.where(sed.name.isin(child_list))
 		).run()
 
+	def _build_case_expr(self, sed, stock_entries):
+		from pypika import Case
+
+		case_expr = Case()
+		for (parent, name), qty in stock_entries.items():
+			case_expr = case_expr.when((sed.parent == parent) & (sed.name == name), qty)
+		return case_expr
+
 	def _update_per_transferred_field(self):
-		self.doc._update_percent_field_in_targets(
-			{
-				"source_dt": "Stock Entry Detail",
-				"target_field": "transferred_qty",
-				"target_ref_field": "qty",
-				"target_dt": "Stock Entry Detail",
-				"join_field": "ste_detail",
-				"target_parent_dt": "Stock Entry",
-				"target_parent_field": "per_transferred",
-				"source_field": "qty",
-				"percent_join_field": "against_stock_entry",
-			},
-			update_modified=True,
-		)
+		self.doc._update_percent_field_in_targets(self._get_per_transferred_config(), update_modified=True)
+
+	def _get_per_transferred_config(self):
+		return {
+			"source_dt": "Stock Entry Detail",
+			"target_field": "transferred_qty",
+			"target_ref_field": "qty",
+			"target_dt": "Stock Entry Detail",
+			"join_field": "ste_detail",
+			"target_parent_dt": "Stock Entry",
+			"target_parent_field": "per_transferred",
+			"source_field": "qty",
+			"percent_join_field": "against_stock_entry",
+		}
 
 	def set_material_request_transfer_status(self, status):
 		material_requests = []
-		parent_se = None
-		if self.doc.outgoing_stock_entry:
-			parent_se = frappe.get_value("Stock Entry", self.doc.outgoing_stock_entry, "add_to_transit")
-
+		parent_se = (
+			frappe.get_value("Stock Entry", self.doc.outgoing_stock_entry, "add_to_transit")
+			if self.doc.outgoing_stock_entry
+			else None
+		)
 		for item in self.doc.items:
-			material_request = item.get("material_request")
-			if material_request not in material_requests:
-				if self.doc.outgoing_stock_entry and parent_se:
-					material_request = frappe.get_value(
-						"Stock Entry Detail", item.ste_detail, "material_request"
-					)
+			mr = item.get("material_request")
+			if mr not in material_requests and self.doc.outgoing_stock_entry and parent_se:
+				mr = frappe.get_value("Stock Entry Detail", item.ste_detail, "material_request")
+			if mr and mr not in material_requests:
+				status = self._update_mr_transfer_status(mr, status, material_requests)
 
-			if material_request and material_request not in material_requests:
-				material_requests.append(material_request)
-				if status == "Completed":
-					qty = get_transferred_qty(material_request)
-					if qty.get("transfer_qty") > qty.get("transferred_qty"):
-						status = "In Transit"
+	def _update_mr_transfer_status(self, material_request, status, material_requests):
+		material_requests.append(material_request)
+		if status == "Completed":
+			qty = get_transferred_qty(material_request)
+			if qty.get("transfer_qty") > qty.get("transferred_qty"):
+				status = "In Transit"
+		frappe.db.set_value("Material Request", material_request, "transfer_status", status)
+		return status
 
-				frappe.db.set_value("Material Request", material_request, "transfer_status", status)
+
+def _resolve_transfer_qty(desire_to_transfer, pending_to_issue, can_transfer):
+	# "No need for transfer but qty still pending" can occur when transferring multiple RM in different Stock Entries
+	if can_transfer:
+		return desire_to_transfer if desire_to_transfer > 0 else pending_to_issue
+	return pending_to_issue if pending_to_issue > 0 else 0
 
 
 def get_transferred_qty(material_request):
 	sed = frappe.qb.DocType("Stock Entry Detail")
-
-	query = (
+	return (
 		frappe.qb.from_(sed)
-		.select(
-			Sum(sed.transfer_qty).as_("transfer_qty"),
-			Sum(sed.transferred_qty).as_("transferred_qty"),
-		)
+		.select(Sum(sed.transfer_qty).as_("transfer_qty"), Sum(sed.transferred_qty).as_("transferred_qty"))
 		.where((sed.material_request == material_request) & (sed.docstatus == 1))
-	).run(as_dict=True)
-
-	return query[0]
+	).run(as_dict=True)[0]
