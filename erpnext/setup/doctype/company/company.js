@@ -69,6 +69,22 @@ frappe.ui.form.on("Company", {
 				},
 			};
 		});
+
+		frm.set_query("default_letter_head", function () {
+			return {
+				filters: {
+					letter_head_for: "DocType",
+				},
+			};
+		});
+
+		frm.set_query("default_letter_head_report", function () {
+			return {
+				filters: {
+					letter_head_for: "Report",
+				},
+			};
+		});
 	},
 
 	company_name: function (frm) {
