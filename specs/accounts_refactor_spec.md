@@ -80,6 +80,8 @@ Added `PurchaseInvoiceGLComposer` with all 13 PI GL builders migrated (make_supp
 ### Phase 4 — Roll out composer to remaining GL-posting doctypes
 Payment Entry, Journal Entry, Delivery Note, Stock Entry, etc. Mechanical now; one PR per doctype (or small batches), each snapshot-gated.
 
+- **Payment Entry — DONE.** Added `payment_entry/services/gl_composer.py` → `PaymentEntryGLComposer(BaseGLComposer)`. `compose()` mirrors the old `build_gl_map` (setup party account field, set txn currency/rate, then party/bank/deductions/tax builders, then `add_regional_gl_entries`). The four row builders (`add_party_gl_entries`, `add_bank_gl_entries`, `add_tax_gl_entries`, `add_deductions_gl_entries`) moved onto the composer and operate on `self.doc`; `build_gl_map` is now a thin shim delegating to the composer. **Advance builders stay on the doc** (`make_advance_gl_entries`, `add_advance_gl_entries`, `get_dr_and_account_for_advances`, `add_advance_gl_for_reference`) — they post in a separate pass inside `make_gl_entries`, not part of `compose()`, and belong to the Phase 5 advances service. Shared helpers (`get_gl_dict`, `calculate_base_allocated_amount_for_reference`, `get_exchange_rate`, `get_party_account_for_taxes`) stay on the doc, called via `self.doc`. Extended the Phase-0 snapshot net with 5 PE scenarios (receive-vs-SI, pay-vs-PI, deductions, taxes, multi-currency). Verified: 17 snapshots byte-identical + 53 existing PE tests green.
+
 ### Phase 5 — Extract `advances.py`
 Move the advances cluster. After composers, because advances cross-calls the exchange-gain/loss helper now on `BaseGLComposer`.
 
