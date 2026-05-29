@@ -30,6 +30,7 @@ from erpnext.subcontracting.doctype.subcontracting_bom.subcontracting_bom import
 
 from .mapper import (
 	get_mapped_purchase_invoice,
+	get_mapped_subcontracting_order,
 	make_inter_company_sales_order,
 	make_purchase_invoice,
 	make_purchase_invoice_from_portal,
