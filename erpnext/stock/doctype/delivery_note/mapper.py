@@ -406,7 +406,7 @@ def make_inter_company_purchase_receipt(source_name: str, target_doc: str | Docu
 
 
 def make_inter_company_transaction(doctype: str, source_name: str, target_doc=None):
-	from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
+	from erpnext.accounts.doctype.sales_invoice.mapper import (
 		get_inter_company_details,
 		set_purchase_references,
 		update_address,

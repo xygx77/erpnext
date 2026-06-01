@@ -128,7 +128,7 @@ def make_supplier_quotation(source_name: str, target_doc: str | Document | None 
 def make_opportunity_from_communication(
 	communication: str, company: str, ignore_communication_links: bool = False
 ):
-	from erpnext.crm.doctype.lead.lead import make_lead_from_communication
+	from erpnext.crm.doctype.lead.mapper import make_lead_from_communication
 
 	doc = frappe.get_doc("Communication", communication)
 

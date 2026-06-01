@@ -10,7 +10,7 @@ from frappe.model.document import Document
 from frappe.model.mapper import map_child_doc
 from frappe.utils import flt, get_link_to_form
 
-from erpnext.selling.doctype.sales_order.sales_order import (
+from erpnext.selling.doctype.sales_order.mapper import (
 	make_delivery_note as create_delivery_note_from_sales_order,
 )
 

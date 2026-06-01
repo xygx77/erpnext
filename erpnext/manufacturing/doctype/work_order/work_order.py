@@ -40,8 +40,6 @@ from erpnext.stock.stock_balance import get_planned_qty, update_bin_qty
 from erpnext.stock.utils import get_bin, get_latest_stock_qty, validate_warehouse_company
 from erpnext.utilities.transaction_base import validate_uom_is_integer
 
-from .mapper import create_pick_list, make_stock_entry, make_stock_return_entry
-
 
 class OverProductionError(frappe.ValidationError):
 	pass

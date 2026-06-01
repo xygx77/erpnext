@@ -21,9 +21,9 @@ from erpnext.accounts.doctype.mode_of_payment.test_mode_of_payment import (
 	set_default_account_for_mode_of_payment,
 )
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
-from erpnext.accounts.doctype.purchase_invoice.purchase_invoice import make_debit_note
+from erpnext.accounts.doctype.purchase_invoice.mapper import make_debit_note
 from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
-from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+from erpnext.accounts.doctype.sales_invoice.mapper import make_sales_return
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.accounts.gl_snapshot import assert_gl_snapshot
 from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
@@ -471,7 +471,7 @@ class TestGLCharacterization(IntegrationTestCase):
 			qty=5,
 			rate=100,
 		)
-		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_return
+		from erpnext.stock.doctype.purchase_receipt.mapper import make_purchase_return
 
 		ret = make_purchase_return(original.name)
 		ret.posting_date = POSTING_DATE

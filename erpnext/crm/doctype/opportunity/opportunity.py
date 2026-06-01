@@ -22,14 +22,6 @@ from erpnext.crm.utils import (
 from erpnext.setup.utils import get_exchange_rate
 from erpnext.utilities.transaction_base import TransactionBase
 
-from .mapper import (
-	make_customer,
-	make_opportunity_from_communication,
-	make_quotation,
-	make_request_for_quotation,
-	make_supplier_quotation,
-)
-
 
 class Opportunity(TransactionBase, CRMNote):
 	# begin: auto-generated types

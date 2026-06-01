@@ -11,7 +11,7 @@ from frappe.query_builder.functions import Abs, Sum
 from frappe.utils import flt
 
 from erpnext.controllers.accounts_controller import merge_taxes
-from erpnext.stock.doctype.delivery_note.delivery_note import make_inter_company_transaction
+from erpnext.stock.doctype.delivery_note.mapper import make_inter_company_transaction
 from erpnext.stock.serial_batch_bundle import (
 	SerialBatchCreation,
 	get_batches_from_bundle,

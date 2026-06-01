@@ -19,8 +19,7 @@ from erpnext.maintenance.doctype.maintenance_visit.test_maintenance_visit import
 )
 from erpnext.manufacturing.doctype.blanket_order.test_blanket_order import make_blanket_order
 from erpnext.selling.doctype.product_bundle.test_product_bundle import make_product_bundle
-from erpnext.selling.doctype.sales_order.sales_order import (
-	WarehouseRequired,
+from erpnext.selling.doctype.sales_order.mapper import (
 	create_pick_list,
 	make_delivery_note,
 	make_material_request,
@@ -28,6 +27,9 @@ from erpnext.selling.doctype.sales_order.sales_order import (
 	make_raw_material_request,
 	make_sales_invoice,
 	make_work_orders,
+)
+from erpnext.selling.doctype.sales_order.sales_order import (
+	WarehouseRequired,
 )
 from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
@@ -252,7 +254,7 @@ class TestSalesOrder(ERPNextTestSuite):
 		self.assertEqual(len(si1.get("items")), 0)
 
 	def test_so_billed_amount_against_return_entry(self):
-		from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+		from erpnext.accounts.doctype.sales_invoice.mapper import make_sales_return
 
 		so = make_sales_order(do_not_submit=True)
 		so.submit()
@@ -1163,7 +1165,7 @@ class TestSalesOrder(ERPNextTestSuite):
 
 	def test_drop_shipping(self):
 		from erpnext.buying.doctype.purchase_order.purchase_order import update_status
-		from erpnext.selling.doctype.sales_order.sales_order import (
+		from erpnext.selling.doctype.sales_order.mapper import (
 			make_purchase_order,
 		)
 		from erpnext.selling.doctype.sales_order.sales_order import update_status as so_update_status
@@ -1259,7 +1261,7 @@ class TestSalesOrder(ERPNextTestSuite):
 		so.cancel()
 
 	def test_drop_shipping_partial_order(self):
-		from erpnext.selling.doctype.sales_order.sales_order import (
+		from erpnext.selling.doctype.sales_order.mapper import (
 			make_purchase_order,
 		)
 		from erpnext.selling.doctype.sales_order.sales_order import update_status as so_update_status
@@ -1319,7 +1321,7 @@ class TestSalesOrder(ERPNextTestSuite):
 
 	def test_drop_shipping_full_for_default_suppliers(self):
 		"""Test if multiple POs are generated in one go against different default suppliers."""
-		from erpnext.selling.doctype.sales_order.sales_order import (
+		from erpnext.selling.doctype.sales_order.mapper import (
 			make_purchase_order,
 		)
 
@@ -1363,7 +1365,7 @@ class TestSalesOrder(ERPNextTestSuite):
 		Tests if the the Product Bundles in the Items table of Sales Orders are replaced with
 		their child items(from the Packed Items table) on creating a Purchase Order from it.
 		"""
-		from erpnext.selling.doctype.sales_order.sales_order import make_purchase_order
+		from erpnext.selling.doctype.sales_order.mapper import make_purchase_order
 
 		product_bundle = make_item("_Test Product Bundle", {"is_stock_item": 0})
 		make_item("_Test Bundle Item 1", {"is_stock_item": 1})
@@ -1393,7 +1395,7 @@ class TestSalesOrder(ERPNextTestSuite):
 		"""
 		Tests if the packed item's `ordered_qty` is updated with the quantity of the Purchase Order
 		"""
-		from erpnext.selling.doctype.sales_order.sales_order import make_purchase_order
+		from erpnext.selling.doctype.sales_order.mapper import make_purchase_order
 
 		product_bundle = make_item("_Test Product Bundle", {"is_stock_item": 0})
 		make_item("_Test Bundle Item 1", {"is_stock_item": 1})
@@ -1915,7 +1917,7 @@ class TestSalesOrder(ERPNextTestSuite):
 
 	def test_so_back_updated_from_wo_via_mr(self):
 		"SO -> MR (Manufacture) -> WO. Test if WO Qty is updated in SO."
-		from erpnext.manufacturing.doctype.work_order.work_order import (
+		from erpnext.manufacturing.doctype.work_order.mapper import (
 			make_stock_entry as make_se_from_wo,
 		)
 		from erpnext.stock.doctype.material_request.material_request import raise_work_orders
@@ -2346,7 +2348,7 @@ class TestSalesOrder(ERPNextTestSuite):
 			self.assertTrue(row.warehouse == warehouse)
 
 	def test_pick_list_for_batch(self):
-		from erpnext.stock.doctype.pick_list.pick_list import create_delivery_note
+		from erpnext.stock.doctype.pick_list.mapper import create_delivery_note
 
 		batch_item = make_item(
 			"_Test Batch Item for Pick LIST",
@@ -2664,7 +2666,7 @@ class TestSalesOrder(ERPNextTestSuite):
 		self.assertEqual(so.status, "To Deliver and Bill")
 
 	def test_item_tax_transfer_from_sales_to_purchase(self):
-		from erpnext.selling.doctype.sales_order.sales_order import make_purchase_order
+		from erpnext.selling.doctype.sales_order.mapper import make_purchase_order
 
 		item_tax = frappe.new_doc("Item Tax Template")
 		item_tax.title = "Test Item Tax Template"

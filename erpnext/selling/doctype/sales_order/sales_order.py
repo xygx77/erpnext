@@ -31,22 +31,6 @@ from erpnext.stock.doctype.stock_reservation_entry.stock_reservation_entry impor
 from erpnext.stock.get_item_details import get_default_bom
 from erpnext.stock.stock_balance import get_reserved_qty, update_bin_qty
 
-from .mapper import (
-	create_pick_list,
-	make_delivery_note,
-	make_inter_company_purchase_order,
-	make_maintenance_schedule,
-	make_maintenance_visit,
-	make_material_request,
-	make_production_plan,
-	make_project,
-	make_purchase_order,
-	make_raw_material_request,
-	make_sales_invoice,
-	make_subcontracting_inward_order,
-	make_work_orders,
-)
-
 form_grid_templates = {"items": "templates/form_grid/item_grid.html"}
 
 

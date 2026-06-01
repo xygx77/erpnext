@@ -10,12 +10,7 @@ from frappe.utils import getdate, nowdate
 from erpnext.controllers.selling_controller import SellingController
 
 from .mapper import (
-	_make_sales_order,
-	create_customer_from_lead,
-	create_customer_from_prospect,
 	get_ordered_items,
-	make_sales_invoice,
-	make_sales_order,
 )
 
 form_grid_templates = {"items": "templates/form_grid/item_grid.html"}

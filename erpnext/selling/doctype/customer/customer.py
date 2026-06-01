@@ -30,10 +30,6 @@ from erpnext.utilities.transaction_base import TransactionBase
 from .mapper import (
 	make_address,
 	make_contact,
-	make_opportunity,
-	make_payment_entry,
-	make_quotation,
-	parse_full_name,
 )
 
 

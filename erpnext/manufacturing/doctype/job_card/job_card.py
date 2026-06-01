@@ -36,7 +36,9 @@ from erpnext.subcontracting.doctype.subcontracting_bom.subcontracting_bom import
 	get_subcontracting_boms_for_finished_goods,
 )
 
-from .mapper import make_corrective_job_card, make_material_request, make_stock_entry, make_subcontracting_po
+from .mapper import (
+	make_stock_entry,
+)
 
 
 class OverlapError(frappe.ValidationError):

@@ -948,7 +948,7 @@ def make_raw_material_request(
 
 @frappe.whitelist()
 def make_inter_company_purchase_order(source_name: str, target_doc: str | Document | None = None):
-	from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_inter_company_transaction
+	from erpnext.accounts.doctype.sales_invoice.mapper import make_inter_company_transaction
 
 	return make_inter_company_transaction("Sales Order", source_name, target_doc)
 

@@ -28,20 +28,6 @@ from erpnext.controllers.selling_controller import SellingController
 from erpnext.setup.doctype.company.company import update_company_current_month_sales
 from erpnext.stock.doctype.delivery_note.delivery_note import update_billed_amount_based_on_so
 
-from .mapper import (
-	create_dunning,
-	create_invoice_discounting,
-	get_inter_company_details,
-	make_delivery_note,
-	make_inter_company_purchase_invoice,
-	make_inter_company_transaction,
-	make_maintenance_schedule,
-	make_sales_return,
-	set_purchase_references,
-	update_address,
-	update_taxes,
-	validate_inter_company_transaction,
-)
 from .services.fixed_assets import FixedAssetService
 from .services.inter_company import (
 	unlink_inter_company_doc,

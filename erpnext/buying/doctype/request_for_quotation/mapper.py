@@ -9,7 +9,7 @@ from frappe.model.document import Document
 from frappe.model.mapper import get_mapped_doc
 
 from erpnext.accounts.party import get_party_account_currency, get_party_details
-from erpnext.stock.doctype.material_request.material_request import set_missing_values
+from erpnext.stock.doctype.material_request.mapper import set_missing_values
 
 
 @frappe.whitelist()

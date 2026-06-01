@@ -14,14 +14,7 @@ from erpnext.controllers.selling_controller import SellingController
 from erpnext.stock.doctype.packed_item.packed_item import make_packing_list
 
 from .mapper import (
-	make_delivery_trip,
-	make_installation_note,
-	make_inter_company_purchase_receipt,
-	make_inter_company_transaction,
-	make_packing_slip,
 	make_sales_invoice,
-	make_sales_return,
-	make_shipment,
 )
 
 form_grid_templates = {"items": "templates/form_grid/item_grid.html"}

@@ -21,8 +21,6 @@ from erpnext.stock.stock_ledger import get_valuation_rate
 
 from .mapper import (
 	make_purchase_receipt,
-	make_subcontract_return,
-	make_subcontract_return_against_rejected_warehouse,
 )
 
 

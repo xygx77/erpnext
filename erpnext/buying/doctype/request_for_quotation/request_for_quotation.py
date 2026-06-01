@@ -15,12 +15,6 @@ from frappe.utils.user import get_user_fullname
 from erpnext.buying.utils import validate_for_items
 from erpnext.controllers.buying_controller import BuyingController
 
-from .mapper import (
-	create_supplier_quotation,
-	get_item_from_material_requests_based_on_supplier,
-	make_supplier_quotation_from_rfq,
-)
-
 STANDARD_USERS = ("Guest", "Administrator")
 
 

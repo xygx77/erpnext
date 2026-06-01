@@ -33,7 +33,7 @@ class ChildItemUpdater:
 	def update(self, trans_items: str) -> None:
 		"""Process item additions, edits, and deletions from trans_items JSON."""
 		from erpnext.buying.doctype.supplier_quotation.supplier_quotation import get_purchased_items
-		from erpnext.selling.doctype.quotation.quotation import get_ordered_items
+		from erpnext.selling.doctype.quotation.mapper import get_ordered_items
 
 		data = frappe.parse_json(trans_items)
 		any_qty_changed = False

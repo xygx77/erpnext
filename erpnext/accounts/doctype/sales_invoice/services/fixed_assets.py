@@ -7,12 +7,12 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_link_to_form
 
-from erpnext.assets.doctype.asset.asset import split_asset
 from erpnext.assets.doctype.asset.depreciation import (
 	depreciate_asset,
 	reset_depreciation_schedule,
 	reverse_depreciation_entry_made_on_disposal,
 )
+from erpnext.assets.doctype.asset.mapper import split_asset
 from erpnext.assets.doctype.asset_activity.asset_activity import add_asset_activity
 
 

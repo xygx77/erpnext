@@ -14,9 +14,7 @@ from frappe.utils.data import DateTimeLikeObject
 from erpnext.accounts.party import set_taxes
 from erpnext.controllers.selling_controller import SellingController
 from erpnext.crm.utils import CRMNote, copy_comments, link_communications, link_open_events
-from erpnext.selling.doctype.customer.customer import parse_full_name
-
-from .mapper import make_customer, make_lead_from_communication, make_opportunity, make_quotation
+from erpnext.selling.doctype.customer.mapper import parse_full_name
 
 
 class Lead(SellingController, CRMNote):
