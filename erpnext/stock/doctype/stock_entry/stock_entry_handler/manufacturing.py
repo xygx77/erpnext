@@ -91,6 +91,11 @@ class BaseManufactureStockEntry(BaseStockEntry):
 			else:
 				item_args["t_warehouse"] = self.doc.to_warehouse
 
+			if not item_args.get("t_warehouse"):
+				item_args["t_warehouse"] = frappe.get_cached_value(
+					"BOM", self.doc.bom_no, "default_target_warehouse"
+				)
+
 			row.qty = row.qty * self.doc.fg_completed_qty
 			if row.get("process_loss_per"):
 				row.qty -= flt(
@@ -142,7 +147,8 @@ class BaseManufactureStockEntry(BaseStockEntry):
 				"conversion_factor": 1,
 				"uom": item_details.stock_uom,
 				"qty": ceil_qty_if_uom_has_whole_number(fg_item_qty, item_details.stock_uom),
-				"t_warehouse": self.doc.to_warehouse,
+				"t_warehouse": self.doc.to_warehouse
+				or frappe.get_cached_value("BOM", self.doc.bom_no, "default_target_warehouse"),
 				"s_warehouse": None,
 				"is_finished_item": 1,
 			}
@@ -366,8 +372,10 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 	def _resolve_rm_warehouse(self, row):
 		if self.doc.from_warehouse:
 			return self.doc.from_warehouse
-		if self.wo_doc.from_wip_warehouse:
+		if self.wo_doc and self.wo_doc.from_wip_warehouse:
 			return self.wo_doc.wip_warehouse
+		if s_warehouse := frappe.get_cached_value("BOM", self.doc.bom_no, "default_source_warehouse"):
+			return s_warehouse
 		return row.get("source_warehouse")
 
 	def get_alternative_items(self, bom_items):
