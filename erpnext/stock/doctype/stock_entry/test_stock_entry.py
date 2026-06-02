@@ -2886,6 +2886,88 @@ class TestStockEntryCoverage(ERPNextTestSuite):
 		if key in materials:
 			self.assertEqual(materials[key].qty, 0)
 
+	@ERPNextTestSuite.change_settings("Manufacturing Settings", {"make_serial_no_batch_from_work_order": 1})
+	@ERPNextTestSuite.change_settings("Global Defaults", {"default_company": "_Test Company"})
+	def test_validate_fg_resets_invalid_serial_no_on_manufacture(self):
+		from erpnext.manufacturing.doctype.bom.test_bom import create_nested_bom
+		from erpnext.manufacturing.doctype.work_order.test_work_order import make_wo_order_test_record
+		from erpnext.manufacturing.doctype.work_order.work_order import (
+			make_stock_entry as _make_stock_entry,
+		)
+
+		fg_item = "_FG Serial No Item"
+		rm_item = "RM for serial item"
+		create_nested_bom({fg_item: {rm_item: {}}}, prefix="")
+
+		item = frappe.get_doc("Item", fg_item)
+		item.has_serial_no = 1
+		item.serial_no_series = "FSNI-.####"
+		item.save()
+
+		make_stock_entry(item_code=rm_item, target="_Test Warehouse - _TC", qty=20, basic_rate=100)
+
+		wo1 = make_wo_order_test_record(item=fg_item, qty=2, skip_transfer=True)
+		wo2 = make_wo_order_test_record(item=fg_item, qty=2, skip_transfer=True)
+		wo1_serial_nos = frappe.get_all("Serial No", filters={"work_order": wo1.name}, pluck="name")
+		wo2_serial_nos = frappe.get_all("Serial No", filters={"work_order": wo2.name}, pluck="name")
+
+		se = frappe.get_doc(_make_stock_entry(wo1.name, "Manufacture", 2))
+		for row in se.items:
+			if row.is_finished_item:
+				row.serial_no = wo2_serial_nos[0]
+				row.serial_and_batch_bundle = None
+
+		se.save()
+
+		for row in se.items:
+			if row.is_finished_item:
+				self.assertIsNone(row.serial_no)
+				self.assertTrue(row.serial_and_batch_bundle)
+				for sn in get_serial_nos_from_bundle(row.serial_and_batch_bundle):
+					self.assertIn(sn, wo1_serial_nos)
+
+	@ERPNextTestSuite.change_settings("Manufacturing Settings", {"make_serial_no_batch_from_work_order": 1})
+	@ERPNextTestSuite.change_settings("Global Defaults", {"default_company": "_Test Company"})
+	def test_validate_fg_resets_invalid_batch_no_on_manufacture(self):
+		from erpnext.manufacturing.doctype.bom.test_bom import create_nested_bom
+		from erpnext.manufacturing.doctype.work_order.test_work_order import make_wo_order_test_record
+		from erpnext.manufacturing.doctype.work_order.work_order import (
+			make_stock_entry as _make_stock_entry,
+		)
+		from erpnext.stock.serial_batch_bundle import get_batches_from_bundle
+
+		fg_item = "_FG Batch No Item"
+		rm_item = "RM for Batch Item"
+		create_nested_bom({fg_item: {rm_item: {}}}, prefix="")
+
+		item = frappe.get_doc("Item", fg_item)
+		item.has_batch_no = 1
+		item.create_new_batch = 1
+		item.batch_number_series = "FBNI-.####"
+		item.save()
+
+		make_stock_entry(item_code=rm_item, target="_Test Warehouse - _TC", qty=20, basic_rate=100)
+
+		wo1 = make_wo_order_test_record(item=fg_item, qty=2, skip_transfer=True)
+		wo2 = make_wo_order_test_record(item=fg_item, qty=2, skip_transfer=True)
+		wo1_batches = frappe.get_all("Batch", filters={"reference_name": wo1.name}, pluck="name")
+		wo2_batches = frappe.get_all("Batch", filters={"reference_name": wo2.name}, pluck="name")
+
+		se = frappe.get_doc(_make_stock_entry(wo1.name, "Manufacture", 2))
+		for row in se.items:
+			if row.is_finished_item:
+				row.batch_no = wo2_batches[0]
+				row.serial_and_batch_bundle = None
+
+		se.save()
+
+		for row in se.items:
+			if row.is_finished_item:
+				self.assertIsNone(row.batch_no)
+				self.assertTrue(row.serial_and_batch_bundle)
+				for bn in list(get_batches_from_bundle(row.serial_and_batch_bundle).keys()):
+					self.assertIn(bn, wo1_batches)
+
 
 def make_serialized_item(self, **args):
 	args = frappe._dict(args)
