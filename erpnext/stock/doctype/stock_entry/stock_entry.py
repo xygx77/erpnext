@@ -1045,6 +1045,10 @@ class StockEntry(StockController, SubcontractingInwardController):
 		return getattr(self, "_wo_doc", None)
 
 	def make_stock_reserve_for_wip_and_fg(self):
+		from erpnext.manufacturing.doctype.work_order.services.stock_reservation import (
+			StockReservationService,
+		)
+
 		if self.is_stock_reserve_for_work_order():
 			pro_doc = frappe.get_doc("Work Order", self.work_order)
 			if (
@@ -1056,7 +1060,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 			):
 				return
 
-			pro_doc.set_reserved_qty_for_wip_and_fg(self)
+			StockReservationService(pro_doc).set_reserved_qty_for_wip_and_fg(self)
 
 	def reserve_stock_for_subcontracting(self):
 		if self.purpose == "Send to Subcontractor" and frappe.get_value(
@@ -1083,6 +1087,10 @@ class StockEntry(StockController, SubcontractingInwardController):
 			)
 
 	def cancel_stock_reserve_for_wip_and_fg(self):
+		from erpnext.manufacturing.doctype.work_order.services.stock_reservation import (
+			StockReservationService,
+		)
+
 		if self.is_stock_reserve_for_work_order():
 			pro_doc = frappe.get_doc("Work Order", self.work_order)
 			if (
@@ -1092,7 +1100,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 			):
 				return
 
-			pro_doc.cancel_reserved_qty_for_wip_and_fg(self)
+			StockReservationService(pro_doc).cancel_reserved_qty_for_wip_and_fg(self)
 
 	def is_stock_reserve_for_work_order(self):
 		if (
