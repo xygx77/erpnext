@@ -1043,11 +1043,6 @@ class AccountsController(TransactionBase):
 
 		set_advance_gain_or_loss(self)
 
-	def make_precision_loss_gl_entry(self, gl_entries):
-		from erpnext.accounts.services.exchange_gain_loss import make_precision_loss_gl_entry
-
-		make_precision_loss_gl_entry(self, gl_entries)
-
 	def gain_loss_journal_already_booked(
 		self, gain_loss_account, exc_gain_loss, ref2_dt, ref2_dn, ref2_detail_no
 	) -> bool:

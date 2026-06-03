@@ -39,7 +39,7 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 		if not (doc.is_return and disable_sdbnb_in_sr):
 			self.stock_delivered_but_not_billed_gl_entries(gl_entries)
 
-		doc.make_precision_loss_gl_entry(gl_entries)
+		self.make_precision_loss_gl_entry(gl_entries)
 		tax_service.make_discount_gl_entries(gl_entries)
 
 		gl_entries = make_regional_gl_entries(gl_entries, doc)
@@ -55,6 +55,35 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 
 		doc.set_transaction_currency_and_rate_in_gl_map(gl_entries)
 		return gl_entries
+
+	def make_precision_loss_gl_entry(self, gl_entries):
+		doc = self.doc
+		(
+			round_off_account,
+			round_off_cost_center,
+			_round_off_for_opening,
+		) = get_round_off_account_and_cost_center(
+			doc.company, "Sales Invoice", doc.name, doc.use_company_roundoff_cost_center
+		)
+
+		precision_loss = doc.get("base_net_total") - flt(
+			doc.get("net_total") * doc.conversion_rate, doc.precision("net_total")
+		)
+
+		if precision_loss:
+			gl_entries.append(
+				doc.get_gl_dict(
+					{
+						"account": round_off_account,
+						"against": doc.customer,
+						"debit": precision_loss,
+						"cost_center": round_off_cost_center
+						if doc.use_company_roundoff_cost_center
+						else doc.cost_center or round_off_cost_center,
+						"remarks": _("Net total calculation precision loss"),
+					}
+				)
+			)
 
 	def stock_delivered_but_not_billed_gl_entries(self, gl_entries):
 		doc = self.doc

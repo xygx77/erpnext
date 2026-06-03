@@ -32,7 +32,7 @@ class PurchaseInvoiceGLComposer(BaseGLComposer):
 
 		self.make_supplier_gl_entry(gl_entries)
 		self.make_item_gl_entries(gl_entries)
-		doc.make_precision_loss_gl_entry(gl_entries)
+		self.make_precision_loss_gl_entry(gl_entries)
 
 		self.make_tax_gl_entries(gl_entries)
 		self.make_internal_transfer_gl_entries(gl_entries)
@@ -47,6 +47,35 @@ class PurchaseInvoiceGLComposer(BaseGLComposer):
 		doc.set_transaction_currency_and_rate_in_gl_map(gl_entries)
 		doc.set_gl_entry_for_purchase_expense(gl_entries)
 		return gl_entries
+
+	def make_precision_loss_gl_entry(self, gl_entries):
+		doc = self.doc
+		(
+			round_off_account,
+			round_off_cost_center,
+			_round_off_for_opening,
+		) = get_round_off_account_and_cost_center(
+			doc.company, "Purchase Invoice", doc.name, doc.use_company_roundoff_cost_center
+		)
+
+		precision_loss = doc.get("base_net_total") - flt(
+			doc.get("net_total") * doc.conversion_rate, doc.precision("net_total")
+		)
+
+		if precision_loss:
+			gl_entries.append(
+				doc.get_gl_dict(
+					{
+						"account": round_off_account,
+						"against": doc.supplier,
+						"credit": precision_loss,
+						"cost_center": round_off_cost_center
+						if doc.use_company_roundoff_cost_center
+						else doc.cost_center or round_off_cost_center,
+						"remarks": _("Net total calculation precision loss"),
+					}
+				)
+			)
 
 	def make_supplier_gl_entry(self, gl_entries):
 		doc = self.doc

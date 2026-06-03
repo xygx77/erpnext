@@ -8,36 +8,7 @@ from frappe import _, qb
 from frappe.utils import flt, get_link_to_form
 
 from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import get_dimensions
-from erpnext.accounts.general_ledger import get_round_off_account_and_cost_center
 from erpnext.accounts.utils import create_gain_loss_journal, get_currency_precision
-
-
-def make_precision_loss_gl_entry(doc, gl_entries: list) -> None:
-	round_off_account, round_off_cost_center, _ = get_round_off_account_and_cost_center(
-		doc.company, "Purchase Invoice", doc.name, doc.use_company_roundoff_cost_center
-	)
-
-	precision_loss = doc.get("base_net_total") - flt(
-		doc.get("net_total") * doc.conversion_rate, doc.precision("net_total")
-	)
-
-	credit_or_debit = "credit" if doc.doctype == "Purchase Invoice" else "debit"
-	against = doc.supplier if doc.doctype == "Purchase Invoice" else doc.customer
-
-	if precision_loss:
-		gl_entries.append(
-			doc.get_gl_dict(
-				{
-					"account": round_off_account,
-					"against": against,
-					credit_or_debit: precision_loss,
-					"cost_center": round_off_cost_center
-					if doc.use_company_roundoff_cost_center
-					else doc.cost_center or round_off_cost_center,
-					"remarks": _("Net total calculation precision loss"),
-				}
-			)
-		)
 
 
 def gain_loss_journal_already_booked(
