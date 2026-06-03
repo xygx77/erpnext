@@ -5,7 +5,7 @@
 import json
 
 import frappe
-from frappe import _, msgprint
+from frappe import _
 from frappe.desk.notifications import clear_doctype_notifications
 from frappe.model.document import Document
 from frappe.utils import cint, cstr, flt
@@ -23,7 +23,6 @@ from erpnext.manufacturing.doctype.blanket_order.blanket_order import (
 )
 from erpnext.stock.doctype.item.item import get_last_purchase_details
 from erpnext.stock.stock_balance import get_ordered_qty, update_bin_qty
-from erpnext.stock.utils import get_bin
 from erpnext.subcontracting.doctype.subcontracting_bom.subcontracting_bom import (
 	get_subcontracting_boms_for_finished_goods,
 )
@@ -180,6 +179,9 @@ class PurchaseOrder(BuyingController):
 				"target_ref_field": "stock_qty",
 				"source_field": "stock_qty",
 				"percent_join_field": "material_request",
+				"global_allowance_field": "over_order_allowance",
+				"global_allowance_doctype": "Buying Settings",
+				"item_allowance_field": "over_order_allowance",
 			}
 		]
 

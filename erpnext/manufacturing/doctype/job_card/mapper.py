@@ -44,9 +44,7 @@ def make_subcontracting_po(source_name: str, target_doc: Document | str | None =
 		"Job Card",
 		source_name,
 		{
-			"Job Card": {
-				"doctype": "Purchase Order",
-			},
+			"Job Card": {"doctype": "Purchase Order", "field_no_map": ["naming_series"]},
 		},
 		target_doc,
 		set_missing_values,

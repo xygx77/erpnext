@@ -92,7 +92,8 @@ class POSService:
 				doc.set("selling_price_list", selling_price_list)
 
 			if not for_validate:
-				doc.update_stock = cint(pos.get("update_stock"))
+				dn_flag = any(d.get("dn_detail") for d in doc.get("items"))
+				doc.update_stock = 0 if dn_flag else cint(pos.get("update_stock"))
 
 			for item in doc.get("items"):
 				if item.get("item_code"):
@@ -257,10 +258,7 @@ class POSService:
 	def clear_unallocated_mode_of_payments(self) -> None:
 		doc = self.doc
 		doc.set("payments", doc.get("payments", {"amount": ["not in", [0, None, ""]]}))
-		frappe.db.sql(
-			"""delete from `tabSales Invoice Payment` where parent = %s and amount = 0""",
-			doc.name,
-		)
+		frappe.db.delete("Sales Invoice Payment", filters={"parent": doc.name, "amount": 0})
 
 	def allow_write_off_only_on_pos(self) -> None:
 		if not self.doc.is_pos and self.doc.write_off_account:
@@ -278,19 +276,29 @@ class POSService:
 
 	def get_warehouse(self) -> str | None:
 		doc = self.doc
-		user_pos_profile = frappe.db.sql(
-			"""select name, warehouse from `tabPOS Profile`
-			where ifnull(user,'') = %s and company = %s""",
-			(frappe.session["user"], doc.company),
+		POSProfile = frappe.qb.DocType("POS Profile")
+
+		user_query = (
+			frappe.qb.from_(POSProfile)
+			.select(POSProfile.name, POSProfile.warehouse)
+			.where(POSProfile.company == doc.company)
+			.where(
+				(POSProfile.user == frappe.session["user"])
+				| ((POSProfile.user.isnull() | (POSProfile.user == "")) & (frappe.session["user"] == ""))
+			)
 		)
+		user_pos_profile = user_query.run()
 		warehouse = user_pos_profile[0][1] if user_pos_profile else None
 
 		if not warehouse:
-			global_pos_profile = frappe.db.sql(
-				"""select name, warehouse from `tabPOS Profile`
-				where (user is null or user = '') and company = %s""",
-				doc.company,
+			global_query = (
+				frappe.qb.from_(POSProfile)
+				.select(POSProfile.name, POSProfile.warehouse)
+				.where(POSProfile.company == doc.company)
+				.where(POSProfile.user.isnull() | (POSProfile.user == ""))
 			)
+			global_pos_profile = global_query.run()
+
 			if global_pos_profile:
 				warehouse = global_pos_profile[0][1]
 			elif not user_pos_profile:
@@ -354,14 +362,21 @@ def update_multi_mode_option(doc, pos_profile) -> None:
 
 
 def get_all_mode_of_payments(doc) -> list:
-	return frappe.db.sql(
-		"""
-		select mpa.default_account, mpa.parent, mp.type as type
-		from `tabMode of Payment Account` mpa,`tabMode of Payment` mp
-		where mpa.parent = mp.name and mpa.company = %(company)s and mp.enabled = 1""",
-		{"company": doc.company},
-		as_dict=1,
+	ModeOfPaymentAccount = frappe.qb.DocType("Mode of Payment Account")
+	ModeOfPayment = frappe.qb.DocType("Mode of Payment")
+
+	query = (
+		frappe.qb.from_(ModeOfPaymentAccount)
+		.join(ModeOfPayment)
+		.on(ModeOfPaymentAccount.parent == ModeOfPayment.name)
+		.select(
+			ModeOfPaymentAccount.default_account, ModeOfPaymentAccount.parent, ModeOfPayment.type.as_("type")
+		)
+		.where(ModeOfPaymentAccount.company == doc.company)
+		.where(ModeOfPayment.enabled == 1)
 	)
+
+	return query.run(as_dict=1)
 
 
 def get_mode_of_payments_info(mode_of_payments: list, company: str) -> dict:

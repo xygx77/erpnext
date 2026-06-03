@@ -180,7 +180,7 @@ class JobCard(Document):
 			self.validate_semi_finished_goods()
 
 	def validate_semi_finished_goods(self):
-		if not self.track_semi_finished_goods:
+		if not self.track_semi_finished_goods or self.is_subcontracted:
 			return
 
 		if self.items and not self.transferred_qty and not self.skip_material_transfer:
@@ -298,7 +298,7 @@ class JobCard(Document):
 				"stock_qty": values.qty,
 				"item_name": values.item_name,
 				"stock_uom": values.stock_uom,
-				"type": values.type,
+				"secondary_item_type": values.secondary_item_type,
 				"bom_secondary_item": values.name,
 			}
 
@@ -1535,7 +1535,7 @@ class JobCard(Document):
 		add_additional_cost(ste.stock_entry, wo_doc, self)
 		ManufactureStockEntry(ste.stock_entry).add_secondary_items_from_job_card()
 		for row in ste.stock_entry.items:
-			if (row.type or row.is_legacy_scrap_item) and not row.t_warehouse:
+			if (row.secondary_item_type or row.is_legacy_scrap_item) and not row.t_warehouse:
 				row.t_warehouse = self.target_warehouse
 
 		if auto_submit:

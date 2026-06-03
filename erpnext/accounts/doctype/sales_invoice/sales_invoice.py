@@ -692,7 +692,7 @@ class SalesInvoice(SellingController):
 		POSService(self).clear_unallocated_mode_of_payments()
 
 	def get_company_abbr(self):
-		return frappe.db.sql("select abbr from tabCompany where name=%s", self.company)[0][0]
+		return frappe.db.get_value("Company", self.company, "abbr")
 
 	def validate_debit_to_acc(self):
 		if not self.debit_to:
@@ -822,12 +822,20 @@ class SalesInvoice(SellingController):
 	def validate_proj_cust(self):
 		"""check for does customer belong to same project as entered.."""
 		if self.project and self.customer:
-			res = frappe.db.sql(
-				"""select name from `tabProject`
-				where name = %s and (customer = %s or customer is null or customer = '')""",
-				(self.project, self.customer),
+			Project = frappe.qb.DocType("Project")
+
+			query = (
+				frappe.qb.from_(Project)
+				.select(Project.name)
+				.where(Project.name == self.project)
+				.where(
+					(Project.customer == self.customer)
+					| (Project.customer.isnull())
+					| (Project.customer == "")
+				)
 			)
-			if not res:
+
+			if not query.run():
 				throw(_("Customer {0} does not belong to project {1}").format(self.customer, self.project))
 
 	def validate_warehouse(self):
@@ -1013,15 +1021,24 @@ class SalesInvoice(SellingController):
 	def update_billing_status_in_dn(self, update_modified=True):
 		if self.is_return and not self.update_billed_amount_in_delivery_note:
 			return
+
 		updated_delivery_notes = []
+
+		SalesInvoiceItem = frappe.qb.DocType("Sales Invoice Item")
+		from frappe.query_builder.functions import Coalesce, Sum
+
 		for d in self.get("items"):
 			if d.dn_detail:
-				billed_amt = frappe.db.sql(
-					"""select sum(amount) from `tabSales Invoice Item`
-					where dn_detail=%s and docstatus=1""",
-					d.dn_detail,
+				query = (
+					frappe.qb.from_(SalesInvoiceItem)
+					.select(Coalesce(Sum(SalesInvoiceItem.amount), 0))
+					.where(SalesInvoiceItem.dn_detail == d.dn_detail)
+					.where(SalesInvoiceItem.docstatus == 1)
 				)
-				billed_amt = billed_amt and billed_amt[0][0] or 0
+
+				res = query.run()
+				billed_amt = res[0][0] if res else 0
+
 				frappe.db.set_value(
 					"Delivery Note Item",
 					d.dn_detail,
@@ -1166,20 +1183,20 @@ def check_if_return_invoice_linked_with_payment_entry(self):
 	else:
 		invoice = self.name
 
-	payment_entries = frappe.db.sql_list(
-		"""
-		SELECT
-			t1.name
-		FROM
-			`tabPayment Entry` t1, `tabPayment Entry Reference` t2
-		WHERE
-			t1.name = t2.parent
-			and t1.docstatus = 1
-			and t2.reference_name = %s
-			and t2.allocated_amount < 0
-		""",
-		invoice,
+	PaymentEntry = frappe.qb.DocType("Payment Entry")
+	PaymentEntryReference = frappe.qb.DocType("Payment Entry Reference")
+
+	query = (
+		frappe.qb.from_(PaymentEntry)
+		.join(PaymentEntryReference)
+		.on(PaymentEntry.name == PaymentEntryReference.parent)
+		.select(PaymentEntry.name)
+		.where(PaymentEntry.docstatus == 1)
+		.where(PaymentEntryReference.reference_name == invoice)
+		.where(PaymentEntryReference.allocated_amount < 0)
 	)
+
+	payment_entries = query.run(pluck=True)
 
 	links_to_pe = []
 	if payment_entries:
@@ -1187,6 +1204,7 @@ def check_if_return_invoice_linked_with_payment_entry(self):
 			payment_entry = frappe.get_doc("Payment Entry", payment)
 			if len(payment_entry.references) > 1:
 				links_to_pe.append(payment_entry.name)
+
 		if links_to_pe:
 			payment_entries_link = [
 				get_link_to_form("Payment Entry", name, label=name) for name in links_to_pe

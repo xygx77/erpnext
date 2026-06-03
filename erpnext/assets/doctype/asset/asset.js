@@ -46,7 +46,7 @@ frappe.ui.form.on("Asset", {
 		frm.make_methods = {
 			"Asset Movement": () => {
 				frappe.call({
-					method: "erpnext.assets.doctype.asset.asset.make_asset_movement",
+					method: "erpnext.assets.doctype.asset.mapper.make_asset_movement",
 					freeze: true,
 					args: {
 						assets: [{ name: frm.doc.name }],
@@ -967,7 +967,7 @@ erpnext.asset.restore_asset = function (frm) {
 
 erpnext.asset.transfer_asset = function (frm) {
 	frappe.call({
-		method: "erpnext.assets.doctype.asset.asset.make_asset_movement",
+		method: "erpnext.assets.doctype.asset.mapper.make_asset_movement",
 		freeze: true,
 		args: {
 			assets: [{ name: frm.doc.name }],
