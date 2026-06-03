@@ -469,13 +469,13 @@ class SalesInvoice(SellingController):
 			and self.loyalty_program
 			and not self.dont_create_loyalty_points
 		):
-			self.make_loyalty_point_entry()
+			LoyaltyService(self).make_loyalty_point_entry()
 		elif self.is_return and self.return_against and not self.is_consolidated and self.loyalty_program:
 			against_si_doc = frappe.get_doc("Sales Invoice", self.return_against)
 			LoyaltyService(against_si_doc).delete_loyalty_point_entry()
 			LoyaltyService(against_si_doc).make_loyalty_point_entry()
 		if self.redeem_loyalty_points and not self.is_consolidated and self.loyalty_points:
-			self.apply_loyalty_points()
+			LoyaltyService(self).apply_loyalty_points()
 
 		self.process_common_party_accounting()
 		self.update_billed_qty_in_scio()
@@ -530,7 +530,7 @@ class SalesInvoice(SellingController):
 			self.update_project()
 
 		if not self.is_return and not self.is_consolidated and self.loyalty_program:
-			self.delete_loyalty_point_entry()
+			LoyaltyService(self).delete_loyalty_point_entry()
 		elif self.is_return and self.return_against and not self.is_consolidated and self.loyalty_program:
 			against_si_doc = frappe.get_doc("Sales Invoice", self.return_against)
 			LoyaltyService(against_si_doc).delete_loyalty_point_entry()
@@ -1107,18 +1107,6 @@ class SalesInvoice(SellingController):
 		if self.needs_repost:
 			self.validate_for_repost()
 			self.repost_accounting_entries()
-
-	# Called by POS Invoice
-	def make_loyalty_point_entry(self):
-		LoyaltyService(self).make_loyalty_point_entry()
-
-	# Called by POS Invoice
-	def delete_loyalty_point_entry(self):
-		LoyaltyService(self).delete_loyalty_point_entry()
-
-	# Called by POS Invoice
-	def apply_loyalty_points(self):
-		LoyaltyService(self).apply_loyalty_points()
 
 	def set_status(self, update=False, status=None, update_modified=True):
 		StatusService(self).set_status(update, status, update_modified)
