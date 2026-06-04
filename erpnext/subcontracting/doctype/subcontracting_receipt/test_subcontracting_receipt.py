@@ -1311,11 +1311,11 @@ class TestSubcontractingReceipt(ERPNextTestSuite):
 
 		# Step - 8: Cancel Subcontracting Receipt
 		scr.cancel()
-		self.assertTrue(scr.docstatus == 2)
+		self.assertEqual(scr.docstatus, 2)
 
 	def test_subcontract_return_from_rejected_warehouse(self):
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
-		from erpnext.subcontracting.doctype.subcontracting_receipt.subcontracting_receipt import (
+		from erpnext.subcontracting.doctype.subcontracting_receipt.mapper import (
 			make_subcontract_return_against_rejected_warehouse,
 		)
 

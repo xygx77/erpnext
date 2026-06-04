@@ -6,50 +6,33 @@ import json
 from collections import defaultdict
 
 import frappe
-from frappe import _, bold
+from frappe import _
 from frappe.model.document import Document
 from frappe.model.mapper import get_mapped_doc
-from frappe.query_builder import DocType
-from frappe.query_builder.functions import Max, Sum
+from frappe.query_builder.functions import Sum
 from frappe.utils import (
 	cint,
-	comma_or,
 	cstr,
 	flt,
-	format_time,
-	formatdate,
 	get_link_to_form,
-	getdate,
 	nowdate,
 )
 
 import erpnext
-from erpnext.accounts.general_ledger import process_gl_map
-from erpnext.accounts.utils import get_account_currency
 from erpnext.buying.utils import check_on_hold_or_closed_status
 from erpnext.controllers.taxes_and_totals import init_landed_taxes_and_totals
 from erpnext.manufacturing.doctype.bom.bom import (
-	add_additional_cost,
 	get_op_cost_from_sub_assemblies,
-	get_secondary_items_from_sub_assemblies,
 	validate_bom_no,
 )
 from erpnext.setup.doctype.brand.brand import get_brand_defaults
 from erpnext.setup.doctype.item_group.item_group import get_item_group_defaults
-from erpnext.stock.doctype.item.item import get_item_defaults
-from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
 from erpnext.stock.get_item_details import (
 	ItemDetailsCtx,
 	get_barcode_data,
 	get_bin_details,
 	get_conversion_factor,
 	get_default_cost_center,
-)
-from erpnext.stock.serial_batch_bundle import (
-	SerialBatchCreation,
-	get_batch_nos,
-	get_empty_batches_based_work_order,
-	get_serial_or_batch_items,
 )
 from erpnext.stock.stock_ledger import get_previous_sle, get_valuation_rate
 from erpnext.stock.utils import get_incoming_rate
@@ -1050,137 +1033,9 @@ class StockEntry(StockController, SubcontractingInwardController):
 				sl_entries.append(sle)
 
 	def get_gl_entries(self, inventory_account_map):
-		gl_entries = super().get_gl_entries(inventory_account_map)
+		from erpnext.stock.doctype.stock_entry.services.gl_composer import StockEntryGLComposer
 
-		if self.purpose in ("Repack", "Manufacture"):
-			total_basic_amount = sum(flt(t.basic_amount) for t in self.get("items") if t.is_finished_item)
-		else:
-			total_basic_amount = sum(flt(t.basic_amount) for t in self.get("items") if t.t_warehouse)
-
-		divide_based_on = total_basic_amount
-		if self.get("additional_costs") and not total_basic_amount:
-			divide_based_on = sum(item.qty for item in self.get("items"))
-
-		item_account_wise_additional_cost = self._build_additional_cost_per_item_account(
-			total_basic_amount, divide_based_on
-		)
-
-		if item_account_wise_additional_cost:
-			self._append_additional_cost_gl_entries(gl_entries, item_account_wise_additional_cost)
-
-		self.set_gl_entries_for_landed_cost_voucher(gl_entries, inventory_account_map)
-		return process_gl_map(gl_entries, from_repost=frappe.flags.through_repost_item_valuation)
-
-	def _build_additional_cost_per_item_account(self, total_basic_amount, divide_based_on):
-		item_account_wise_additional_cost = {}
-
-		for t in self.get("additional_costs"):
-			for d in self.get("items"):
-				if self.purpose in ("Repack", "Manufacture") and not d.is_finished_item:
-					continue
-				elif not d.t_warehouse:
-					continue
-
-				item_account_wise_additional_cost.setdefault((d.item_code, d.name), {})
-				item_account_wise_additional_cost[(d.item_code, d.name)].setdefault(
-					t.expense_account, {"amount": 0.0, "base_amount": 0.0}
-				)
-
-				multiply_based_on = d.basic_amount if total_basic_amount else d.qty
-				entry = item_account_wise_additional_cost[(d.item_code, d.name)][t.expense_account]
-				entry["amount"] += flt(t.amount * multiply_based_on) / divide_based_on
-				entry["base_amount"] += flt(t.base_amount * multiply_based_on) / divide_based_on
-
-		return item_account_wise_additional_cost
-
-	def _append_additional_cost_gl_entries(self, gl_entries, item_account_wise_additional_cost):
-		for d in self.get("items"):
-			for account, amount in item_account_wise_additional_cost.get((d.item_code, d.name), {}).items():
-				if not amount:
-					continue
-
-				gl_entries.append(
-					self.get_gl_dict(
-						{
-							"account": account,
-							"against": d.expense_account,
-							"cost_center": d.cost_center,
-							"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
-							"credit_in_account_currency": flt(amount["amount"]),
-							"credit": flt(amount["base_amount"]),
-						},
-						item=d,
-					)
-				)
-
-				gl_entries.append(
-					self.get_gl_dict(
-						{
-							"account": d.expense_account,
-							"against": account,
-							"cost_center": d.cost_center,
-							"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
-							"credit": -1 * amount["base_amount"],  # negative credit instead of debit
-						},
-						item=d,
-					)
-				)
-
-	def set_gl_entries_for_landed_cost_voucher(self, gl_entries, inventory_account_map):
-		landed_cost_entries = self.get_item_account_wise_lcv_entries()
-		if not landed_cost_entries:
-			return
-
-		for item in self.get("items"):
-			if item.s_warehouse:
-				continue
-
-			if (item.item_code, item.name) in landed_cost_entries:
-				for account, amount in landed_cost_entries[(item.item_code, item.name)].items():
-					account_currency = get_account_currency(account)
-					credit_amount = (
-						flt(amount["base_amount"])
-						if (amount["base_amount"] or account_currency != self.company_currency)
-						else flt(amount["amount"])
-					)
-
-					_inv_dict = self.get_inventory_account_dict(item, inventory_account_map, "t_warehouse")
-					gl_entries.append(
-						self.get_gl_dict(
-							{
-								"account": account,
-								"against": _inv_dict["account"],
-								"cost_center": item.cost_center,
-								"debit": 0.0,
-								"credit": credit_amount,
-								"remarks": _("Accounting Entry for LCV in Stock Entry {0}").format(self.name),
-								"credit_in_account_currency": flt(amount["amount"]),
-								"account_currency": account_currency,
-								"project": item.project,
-							},
-							item=item,
-						)
-					)
-
-					account_currency = get_account_currency(item.expense_account)
-
-					# credit amount in negative to knock off the debit entry
-					gl_entries.append(
-						self.get_gl_dict(
-							{
-								"account": item.expense_account,
-								"against": _inv_dict["account"],
-								"cost_center": item.cost_center,
-								"debit": 0.0,
-								"credit": credit_amount * -1,
-								"remarks": _("Accounting Entry for LCV in Stock Entry {0}").format(self.name),
-								"debit_in_account_currency": flt(amount["amount"]),
-								"account_currency": account_currency,
-								"project": item.project,
-							},
-							item=item,
-						)
-					)
+		return StockEntryGLComposer(self).compose(inventory_account_map)
 
 	@property
 	def pro_doc(self):
@@ -1190,6 +1045,10 @@ class StockEntry(StockController, SubcontractingInwardController):
 		return getattr(self, "_wo_doc", None)
 
 	def make_stock_reserve_for_wip_and_fg(self):
+		from erpnext.manufacturing.doctype.work_order.services.stock_reservation import (
+			StockReservationService,
+		)
+
 		if self.is_stock_reserve_for_work_order():
 			pro_doc = frappe.get_doc("Work Order", self.work_order)
 			if (
@@ -1201,7 +1060,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 			):
 				return
 
-			pro_doc.set_reserved_qty_for_wip_and_fg(self)
+			StockReservationService(pro_doc).set_reserved_qty_for_wip_and_fg(self)
 
 	def reserve_stock_for_subcontracting(self):
 		if self.purpose == "Send to Subcontractor" and frappe.get_value(
@@ -1228,6 +1087,10 @@ class StockEntry(StockController, SubcontractingInwardController):
 			)
 
 	def cancel_stock_reserve_for_wip_and_fg(self):
+		from erpnext.manufacturing.doctype.work_order.services.stock_reservation import (
+			StockReservationService,
+		)
+
 		if self.is_stock_reserve_for_work_order():
 			pro_doc = frappe.get_doc("Work Order", self.work_order)
 			if (
@@ -1237,7 +1100,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 			):
 				return
 
-			pro_doc.cancel_reserved_qty_for_wip_and_fg(self)
+			StockReservationService(pro_doc).cancel_reserved_qty_for_wip_and_fg(self)
 
 	def is_stock_reserve_for_work_order(self):
 		if (

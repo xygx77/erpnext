@@ -9,7 +9,7 @@ from frappe.utils import add_days, add_months, getdate, today
 
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from erpnext.accounts.utils import get_fiscal_year
-from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_invoice
+from erpnext.buying.doctype.purchase_order.mapper import make_purchase_invoice
 from erpnext.tests.utils import ERPNextTestSuite
 
 
@@ -476,7 +476,7 @@ class TestTaxWithholdingCategory(ERPNextTestSuite):
 
 		# Cumulative threshold is 10,000
 		# Threshold calculation should be only on the third invoice
-		self.assertTrue(len(pi1.taxes) > 0)
+		self.assertGreater(len(pi1.taxes), 0)
 		self.assertEqual(pi1.taxes[0].tax_amount, 1000)
 
 		self.cleanup_invoices(invoices)
@@ -3654,7 +3654,7 @@ class TestTaxWithholdingCategory(ERPNextTestSuite):
 		pi = create_purchase_invoice(supplier="Test TDS Supplier", rate=50000, do_not_save=True)
 		pi.save()
 
-		self.assertTrue(len(pi.tax_withholding_entries) > 0)
+		self.assertGreater(len(pi.tax_withholding_entries), 0)
 		pi.delete()
 
 	def test_tds_rounding_with_decimal_amounts(self):
@@ -3720,7 +3720,7 @@ class TestTaxWithholdingCategory(ERPNextTestSuite):
 		self.setup_party_with_category("Supplier", "Test TDS Supplier", "Cumulative Threshold TDS")
 		pi = create_purchase_invoice(supplier="Test TDS Supplier", rate=50000)
 
-		self.assertTrue(len(pi.tax_withholding_entries) > 0)
+		self.assertGreater(len(pi.tax_withholding_entries), 0)
 		pi.override_tax_withholding_entries = 1
 
 		entry = pi.tax_withholding_entries[0]

@@ -7,10 +7,13 @@ from frappe.query_builder.functions import Sum
 from frappe.utils import ceil, cint, flt, get_link_to_form
 
 from erpnext.manufacturing.doctype.bom.bom import add_additional_cost
+from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
 from erpnext.stock.serial_batch_bundle import (
 	SerialBatchCreation,
 	get_batch_nos,
+	get_batches_from_bundle,
 	get_empty_batches_based_work_order,
+	get_serial_nos_from_bundle,
 )
 
 from .base import BaseStockEntry
@@ -171,25 +174,30 @@ class BaseManufactureStockEntry(BaseStockEntry):
 		else:
 			self.doc.append("items", item_details)
 
-	def set_serial_nos_for_finished_good(self, item_details):
+	def set_serial_nos_for_finished_good(self, item_details, existing_row=None):
 		serial_nos = self.get_available_serial_nos_for_fg(item_details.item_code)
-		if serial_nos:
-			row = frappe._dict({"serial_nos": serial_nos[0 : cint(item_details.qty)]})
+		if not serial_nos:
+			return
 
-			_id = create_serial_and_batch_bundle(
-				self.doc,
-				row,
-				frappe._dict(
-					{
-						"item_code": item_details.item_code,
-						"warehouse": item_details.t_warehouse,
-					}
-				),
-			)
+		row = frappe._dict({"serial_nos": serial_nos[0 : cint(item_details.qty)]})
 
+		_id = create_serial_and_batch_bundle(
+			self.doc,
+			row,
+			frappe._dict(
+				{
+					"item_code": item_details.item_code,
+					"warehouse": item_details.t_warehouse,
+				}
+			),
+		)
+
+		if existing_row:
+			existing_row.serial_and_batch_bundle = _id
+			existing_row.use_serial_batch_fields = 0
+		else:
 			item_details.serial_and_batch_bundle = _id
 			item_details.use_serial_batch_fields = 0
-
 			self.doc.append("items", item_details)
 
 	def get_available_serial_nos_for_fg(self, item_code) -> list[str]:
@@ -205,22 +213,23 @@ class BaseManufactureStockEntry(BaseStockEntry):
 			order_by="creation asc",
 		)
 
-	def set_batchwise_finished_goods(self, item_details):
-		batches = get_empty_batches_based_work_order(self.doc.work_order, self.doc.pro_doc.production_item)
+	def set_batchwise_finished_goods(self, item_details, existing_row=None):
+		batches = get_empty_batches_based_work_order(self.doc.work_order, self.wo_doc.production_item)
 
 		if not batches:
-			self.doc.append("items", item_details)
+			if not existing_row:
+				self.doc.append("items", item_details)
 		else:
-			self.add_batchwise_finished_good(batches, item_details)
+			self.add_batchwise_finished_good(batches, item_details, existing_row=existing_row)
 
-	def add_batchwise_finished_good(self, batches, item_details):
+	def add_batchwise_finished_good(self, batches, item_details, existing_row=None):
 		qty = flt(self.doc.fg_completed_qty)
 		row = frappe._dict({"batches_to_be_consume": defaultdict(float)})
 		self.update_batches_to_be_consume(batches, row, qty)
 		if row.batches_to_be_consume:
-			self._link_fg_bundle_and_append(item_details, row)
+			self._link_fg_bundle_and_append(item_details, row, existing_row=existing_row)
 
-	def _link_fg_bundle_and_append(self, item_details, row):
+	def _link_fg_bundle_and_append(self, item_details, row, existing_row=None):
 		_id = create_serial_and_batch_bundle(
 			self.doc,
 			row,
@@ -228,8 +237,13 @@ class BaseManufactureStockEntry(BaseStockEntry):
 				{"item_code": self.wo_doc.production_item, "warehouse": item_details.get("t_warehouse")}
 			),
 		)
-		item_details["serial_and_batch_bundle"] = _id
-		self.doc.append("items", item_details)
+		if existing_row:
+			existing_row.serial_and_batch_bundle = _id
+			existing_row.use_serial_batch_fields = 0
+		else:
+			item_details["serial_and_batch_bundle"] = _id
+			item_details["use_serial_batch_fields"] = 0
+			self.doc.append("items", item_details)
 
 	def update_batches_to_be_consume(self, batches, row, qty):
 		qty_to_be_consumed = qty
@@ -259,6 +273,81 @@ class ManufactureStockEntry(BaseManufactureStockEntry):
 		self.validate_warehouse()
 		self.validate_raw_materials_exists()
 		self.validate_component_and_quantities()
+		self.validate_finished_good_serial_batch_for_work_order()
+
+	def validate_finished_good_serial_batch_for_work_order(self):
+		if not (
+			self.doc.work_order
+			and self.wo_doc
+			and self.wo_doc.track_semi_finished_goods != 1
+			and cint(
+				frappe.db.get_single_value(
+					"Manufacturing Settings", "make_serial_no_batch_from_work_order", cache=True
+				)
+			)
+			and (self.wo_doc.has_serial_no or self.wo_doc.has_batch_no)
+		):
+			return
+
+		for row in self.doc.items:
+			if not row.is_finished_item:
+				continue
+
+			if self.check_invalid_serial_batch_nos_for_finished_good_item(row):
+				self.reset_serial_batch_on_fg_row(row)
+				frappe.msgprint(
+					_(
+						"Row {0}: Serial/Batch has been reset to values linked with Work Order {1}"
+						" because the previously selected serial/batch does not belong to this Work Order."
+					).format(row.idx, frappe.bold(self.doc.work_order))
+				)
+
+	def check_invalid_serial_batch_nos_for_finished_good_item(self, row) -> bool:
+		if self.wo_doc.has_serial_no:
+			serial_nos = get_serial_nos(row.serial_no) if row.serial_no else []
+			if not serial_nos and row.serial_and_batch_bundle:
+				serial_nos = get_serial_nos_from_bundle(row.serial_and_batch_bundle)
+			if serial_nos:
+				valid_serial_nos = frappe.get_all(
+					"Serial No",
+					filters={"name": ("in", serial_nos), "work_order": self.doc.work_order},
+					pluck="name",
+				)
+				return bool(set(serial_nos) - set(valid_serial_nos))
+			else:
+				return True
+
+		if self.wo_doc.has_batch_no:
+			batch_nos = [row.batch_no] if row.batch_no else []
+			if not batch_nos and row.serial_and_batch_bundle:
+				batch_nos = list(get_batches_from_bundle(row.serial_and_batch_bundle).keys())
+			if batch_nos:
+				valid_batch_nos = frappe.get_all(
+					"Batch",
+					filters={"name": ("in", batch_nos), "reference_name": self.doc.work_order},
+					pluck="name",
+				)
+				return bool(set(batch_nos) - set(valid_batch_nos))
+			else:
+				return True
+
+	def reset_serial_batch_on_fg_row(self, row):
+		item_details = frappe._dict(
+			{
+				"item_code": row.item_code,
+				"t_warehouse": row.t_warehouse,
+				"qty": row.qty,
+			}
+		)
+
+		row.serial_no = None
+		row.batch_no = None
+		row.serial_and_batch_bundle = None
+
+		if self.wo_doc.has_serial_no:
+			self.set_serial_nos_for_finished_good(item_details, existing_row=row)
+		elif self.wo_doc.has_batch_no:
+			self.set_batchwise_finished_goods(item_details, existing_row=row)
 
 	def set_job_card_data(self):
 		if self.doc.job_card and not self.doc.work_order:

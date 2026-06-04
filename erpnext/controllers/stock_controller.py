@@ -13,7 +13,6 @@ import erpnext
 from erpnext.accounts.general_ledger import (
 	make_gl_entries,
 	make_reverse_gl_entries,
-	process_gl_map,
 )
 from erpnext.accounts.utils import cancel_exchange_gain_loss_journal, get_fiscal_year
 from erpnext.controllers.accounts_controller import AccountsController
@@ -691,140 +690,10 @@ class StockController(AccountsController):
 	def get_gl_entries(
 		self, inventory_account_map=None, default_expense_account=None, default_cost_center=None
 	):
-		if not inventory_account_map:
-			inventory_account_map = self.get_inventory_account_map()
+		from erpnext.stock.services.base_stock_gl_composer import BaseStockGLComposer
 
-		sle_map = self.get_stock_ledger_details()
-		voucher_details = self.get_voucher_details(default_expense_account, default_cost_center, sle_map)
-
-		gl_list = []
-		warehouse_with_no_account = []
-		precision = self.get_debit_field_precision()
-		for item_row in voucher_details:
-			sle_list = sle_map.get(item_row.name)
-			sle_rounding_diff = 0.0
-			if sle_list:
-				for sle in sle_list:
-					_inv_dict = self.get_inventory_account_dict(sle, inventory_account_map)
-
-					if _inv_dict.get("account"):
-						# from warehouse account
-
-						sle_rounding_diff += flt(sle.stock_value_difference)
-
-						self.check_expense_account(item_row)
-
-						# expense account/ target_warehouse / source_warehouse
-						if item_row.get("target_warehouse"):
-							_target_wh_inv_dict = self.get_inventory_account_dict(
-								item_row, inventory_account_map, warehouse_field="target_warehouse"
-							)
-							expense_account = _target_wh_inv_dict["account"]
-						else:
-							expense_account = item_row.expense_account
-
-						gl_list.append(
-							self.get_gl_dict(
-								{
-									"account": _inv_dict["account"],
-									"against": expense_account,
-									"cost_center": item_row.cost_center,
-									"project": sle.get("project") or item_row.project or self.get("project"),
-									"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
-									"debit": flt(sle.stock_value_difference, precision),
-									"is_opening": item_row.get("is_opening")
-									or self.get("is_opening")
-									or "No",
-								},
-								_inv_dict["account_currency"],
-								item=item_row,
-							)
-						)
-
-						gl_list.append(
-							self.get_gl_dict(
-								{
-									"account": expense_account,
-									"against": _inv_dict["account"],
-									"cost_center": item_row.cost_center,
-									"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
-									"debit": -1 * flt(sle.stock_value_difference, precision),
-									"project": sle.get("project")
-									or item_row.get("project")
-									or self.get("project"),
-									"is_opening": item_row.get("is_opening")
-									or self.get("is_opening")
-									or "No",
-								},
-								item=item_row,
-							)
-						)
-					elif sle.warehouse not in warehouse_with_no_account:
-						warehouse_with_no_account.append(sle.warehouse)
-
-			if abs(sle_rounding_diff) > (1.0 / (10**precision)) and self.is_internal_transfer():
-				warehouse_asset_account = ""
-				if self.get("is_internal_customer"):
-					_inv_dict = self.get_inventory_account_dict(
-						item_row, inventory_account_map, warehouse_field="target_warehouse"
-					)
-
-					warehouse_asset_account = _inv_dict.get("account") if _inv_dict else None
-				elif self.get("is_internal_supplier"):
-					_inv_dict = self.get_inventory_account_dict(item_row, inventory_account_map)
-
-					warehouse_asset_account = _inv_dict.get("account") if _inv_dict else None
-
-				expense_account = frappe.get_cached_value("Company", self.company, "default_expense_account")
-				if not expense_account:
-					frappe.throw(
-						_(
-							"Please set default cost of goods sold account in company {0} for booking rounding gain and loss during stock transfer"
-						).format(frappe.bold(self.company))
-					)
-
-				gl_list.append(
-					self.get_gl_dict(
-						{
-							"account": expense_account,
-							"against": warehouse_asset_account,
-							"cost_center": item_row.cost_center,
-							"project": item_row.project or self.get("project"),
-							"remarks": _("Rounding gain/loss Entry for Stock Transfer"),
-							"debit": sle_rounding_diff,
-							"is_opening": item_row.get("is_opening") or self.get("is_opening") or "No",
-						},
-						_inv_dict["account_currency"],
-						item=item_row,
-					)
-				)
-
-				gl_list.append(
-					self.get_gl_dict(
-						{
-							"account": warehouse_asset_account,
-							"against": expense_account,
-							"cost_center": item_row.cost_center,
-							"remarks": _("Rounding gain/loss Entry for Stock Transfer"),
-							"credit": sle_rounding_diff,
-							"project": item_row.get("project") or self.get("project"),
-							"is_opening": item_row.get("is_opening") or self.get("is_opening") or "No",
-						},
-						item=item_row,
-					)
-				)
-
-		if warehouse_with_no_account:
-			for wh in warehouse_with_no_account:
-				if frappe.get_cached_value("Warehouse", wh, "company"):
-					frappe.throw(
-						_(
-							"Warehouse {0} is not linked to any account, please mention the account in the warehouse record or set default inventory account in company {1}."
-						).format(wh, self.company)
-					)
-
-		return process_gl_map(
-			gl_list, precision=precision, from_repost=frappe.flags.through_repost_item_valuation
+		return BaseStockGLComposer(self).compose(
+			inventory_account_map, default_expense_account, default_cost_center
 		)
 
 	def get_debit_field_precision(self):
@@ -1792,28 +1661,25 @@ class StockController(AccountsController):
 		item=None,
 		posting_date=None,
 	):
-		gl_entry = {
-			"account": account,
-			"cost_center": cost_center,
-			"debit": debit,
-			"credit": credit,
-			"against": against_account,
-			"remarks": remarks,
-		}
+		from erpnext.accounts.services.base_gl_composer import add_gl_entry
 
-		if voucher_detail_no:
-			gl_entry.update({"voucher_detail_no": voucher_detail_no})
-
-		if debit_in_account_currency:
-			gl_entry.update({"debit_in_account_currency": debit_in_account_currency})
-
-		if credit_in_account_currency:
-			gl_entry.update({"credit_in_account_currency": credit_in_account_currency})
-
-		if posting_date:
-			gl_entry.update({"posting_date": posting_date})
-
-		gl_entries.append(self.get_gl_dict(gl_entry, item=item))
+		add_gl_entry(
+			self,
+			gl_entries,
+			account,
+			cost_center,
+			debit,
+			credit,
+			remarks,
+			against_account,
+			debit_in_account_currency,
+			credit_in_account_currency,
+			account_currency,
+			project,
+			voucher_detail_no,
+			item,
+			posting_date,
+		)
 
 	def update_stock_reservation_entries(self):
 		def get_sre_list():
@@ -1936,6 +1802,43 @@ class StockController(AccountsController):
 					sre_doc.update_reserved_stock_in_bin()
 
 					qty -= working_qty
+
+	def check_for_on_hold_or_closed_status(
+		self, ref_doctype: str, ref_fieldname: str, exclude_if_field: str | None = None
+	) -> None:
+		def _include(d):
+			return d.get(ref_fieldname) and not (exclude_if_field and d.get(exclude_if_field))
+
+		included = [(d, d.get(ref_fieldname)) for d in self.get("items") if _include(d)]
+		if not included:
+			return
+
+		status_map = {
+			r.name: r.status
+			for r in frappe.get_all(
+				ref_doctype,
+				filters={"name": ["in", {name for _, name in included}]},
+				fields=["name", "status"],
+			)
+		}
+
+		errors = []
+		seen = set()
+		for _d, ref_name in included:
+			if ref_name in seen:
+				continue
+			seen.add(ref_name)
+			if (status := status_map.get(ref_name)) in ("Closed", "On Hold"):
+				errors.append(
+					_("{ref_doctype} {ref_name} status is {status}.").format(
+						ref_doctype=frappe.bold(_(ref_doctype)),
+						ref_name=frappe.bold(ref_name),
+						status=frappe.bold(_(status)),
+					)
+				)
+
+		if errors:
+			frappe.throw("<br>".join(errors), frappe.InvalidStatusError)
 
 
 @frappe.whitelist()
@@ -2113,7 +2016,7 @@ def repost_required_for_queue(doc: StockController) -> bool:
 
 
 @frappe.whitelist()
-def check_item_quality_inspection(doctype: str, items: str | list[dict]):
+def check_item_quality_inspection(doctype: str, docstatus: str | int, items: str | list[dict]):
 	if isinstance(items, str):
 		items = json.loads(items)
 
@@ -2125,13 +2028,30 @@ def check_item_quality_inspection(doctype: str, items: str | list[dict]):
 		"Delivery Note": "inspection_required_before_delivery",
 	}
 
-	items_to_remove = []
-	for item in items:
-		if not frappe.db.get_value("Item", item.get("item_code"), inspection_fieldname_map.get(doctype)):
-			items_to_remove.append(item)
-	items = [item for item in items if item not in items_to_remove]
+	inspection_fieldname = inspection_fieldname_map.get(doctype)
+	if inspection_fieldname is None:
+		return []
 
-	return items
+	allow_after_transaction = cint(docstatus) == 1 and frappe.get_single_value(
+		"Stock Settings", "allow_to_make_quality_inspection_after_purchase_or_delivery"
+	)
+
+	if allow_after_transaction:
+		return items
+
+	item_codes = list({item.get("item_code") for item in items})
+
+	Item = frappe.qb.DocType("Item")
+	results = (
+		frappe.qb.from_(Item)
+		.select(Item.name)
+		.where((Item.name.isin(item_codes)) & (Item[inspection_fieldname] == 1))
+		.run(as_dict=True)
+	)
+
+	inspection_required_items = {row.name for row in results}
+
+	return [item for item in items if item.get("item_code") in inspection_required_items]
 
 
 @frappe.whitelist()

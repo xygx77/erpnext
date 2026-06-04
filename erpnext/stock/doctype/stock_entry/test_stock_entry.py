@@ -13,7 +13,7 @@ from erpnext.stock.doctype.item.test_item import (
 	make_item_variant,
 	set_item_variant_settings,
 )
-from erpnext.stock.doctype.material_request.material_request import (
+from erpnext.stock.doctype.material_request.mapper import (
 	make_in_transit_stock_entry,
 )
 from erpnext.stock.doctype.material_request.test_material_request import (
@@ -184,7 +184,7 @@ class TestStockEntry(ERPNextTestSuite):
 			for d in mr.items:
 				items.append(d.item_code)
 
-		self.assertTrue(item_code in items)
+		self.assertIn(item_code, items)
 
 	def test_add_to_transit_entry(self):
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
@@ -830,7 +830,7 @@ class TestStockEntry(ERPNextTestSuite):
 		frappe.db.set_single_value("Stock Settings", "stock_frozen_upto_days", 0)
 
 	def test_work_order(self):
-		from erpnext.manufacturing.doctype.work_order.work_order import (
+		from erpnext.manufacturing.doctype.work_order.mapper import (
 			make_stock_entry as _make_stock_entry,
 		)
 
@@ -868,7 +868,7 @@ class TestStockEntry(ERPNextTestSuite):
 
 	@ERPNextTestSuite.change_settings("Manufacturing Settings", {"material_consumption": 1})
 	def test_work_order_manufacture_with_material_consumption(self):
-		from erpnext.manufacturing.doctype.work_order.work_order import (
+		from erpnext.manufacturing.doctype.work_order.mapper import (
 			make_stock_entry as _make_stock_entry,
 		)
 
@@ -949,11 +949,11 @@ class TestStockEntry(ERPNextTestSuite):
 		work_order.insert()
 		work_order.submit()
 
-		from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry
+		from erpnext.manufacturing.doctype.work_order.mapper import make_stock_entry
 
 		stock_entry = frappe.get_doc(make_stock_entry(work_order.name, "Manufacture", 1))
 		stock_entry.insert()
-		self.assertTrue("_Test Variant Item-S" in [d.item_code for d in stock_entry.items])
+		self.assertIn("_Test Variant Item-S", [d.item_code for d in stock_entry.items])
 
 	def test_nagative_stock_for_batch(self):
 		item = make_item(
@@ -992,7 +992,7 @@ class TestStockEntry(ERPNextTestSuite):
 		self.assertRaises(frappe.ValidationError, ste.submit)
 
 	def test_quality_check_for_secondary_item(self):
-		from erpnext.manufacturing.doctype.work_order.work_order import (
+		from erpnext.manufacturing.doctype.work_order.mapper import (
 			make_stock_entry as _make_stock_entry,
 		)
 
@@ -1441,7 +1441,7 @@ class TestStockEntry(ERPNextTestSuite):
 
 	def test_mapped_stock_entry(self):
 		"Check if rate and stock details are populated in mapped SE given warehouse."
-		from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_stock_entry
+		from erpnext.stock.doctype.purchase_receipt.mapper import make_stock_entry
 		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
 
 		item_code = "_TestMappedItem"
@@ -2405,7 +2405,7 @@ class TestStockEntry(ERPNextTestSuite):
 	)
 	def test_validation_as_per_bom_with_continuous_raw_material_consumption(self):
 		from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
-		from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry as _make_stock_entry
+		from erpnext.manufacturing.doctype.work_order.mapper import make_stock_entry as _make_stock_entry
 		from erpnext.manufacturing.doctype.work_order.work_order import make_work_order
 
 		fg_item = make_item("_Mobiles", properties={"is_stock_item": 1}).name
@@ -2796,7 +2796,7 @@ class TestStockEntryCoverage(ERPNextTestSuite):
 
 	def test_get_available_materials_tracks_transferred_qty(self):
 		from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
-		from erpnext.manufacturing.doctype.work_order.work_order import (
+		from erpnext.manufacturing.doctype.work_order.mapper import (
 			make_stock_entry as _make_stock_entry,
 		)
 		from erpnext.stock.doctype.stock_entry.stock_entry_handler.disassemble import (
@@ -2841,7 +2841,7 @@ class TestStockEntryCoverage(ERPNextTestSuite):
 
 	def test_get_available_materials_reduces_qty_after_consumption(self):
 		from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
-		from erpnext.manufacturing.doctype.work_order.work_order import (
+		from erpnext.manufacturing.doctype.work_order.mapper import (
 			make_stock_entry as _make_stock_entry,
 		)
 		from erpnext.stock.doctype.stock_entry.stock_entry_handler.disassemble import (
@@ -2885,6 +2885,88 @@ class TestStockEntryCoverage(ERPNextTestSuite):
 		key = (rm, wip_wh)
 		if key in materials:
 			self.assertEqual(materials[key].qty, 0)
+
+	@ERPNextTestSuite.change_settings("Manufacturing Settings", {"make_serial_no_batch_from_work_order": 1})
+	@ERPNextTestSuite.change_settings("Global Defaults", {"default_company": "_Test Company"})
+	def test_validate_fg_resets_invalid_serial_no_on_manufacture(self):
+		from erpnext.manufacturing.doctype.bom.test_bom import create_nested_bom
+		from erpnext.manufacturing.doctype.work_order.mapper import (
+			make_stock_entry as _make_stock_entry,
+		)
+		from erpnext.manufacturing.doctype.work_order.test_work_order import make_wo_order_test_record
+
+		fg_item = "_FG Serial No Item"
+		rm_item = "RM for serial item"
+		create_nested_bom({fg_item: {rm_item: {}}}, prefix="")
+
+		item = frappe.get_doc("Item", fg_item)
+		item.has_serial_no = 1
+		item.serial_no_series = "FSNI-.####"
+		item.save()
+
+		make_stock_entry(item_code=rm_item, target="_Test Warehouse - _TC", qty=20, basic_rate=100)
+
+		wo1 = make_wo_order_test_record(item=fg_item, qty=2, skip_transfer=True)
+		wo2 = make_wo_order_test_record(item=fg_item, qty=2, skip_transfer=True)
+		wo1_serial_nos = frappe.get_all("Serial No", filters={"work_order": wo1.name}, pluck="name")
+		wo2_serial_nos = frappe.get_all("Serial No", filters={"work_order": wo2.name}, pluck="name")
+
+		se = frappe.get_doc(_make_stock_entry(wo1.name, "Manufacture", 2))
+		for row in se.items:
+			if row.is_finished_item:
+				row.serial_no = wo2_serial_nos[0]
+				row.serial_and_batch_bundle = None
+
+		se.save()
+
+		for row in se.items:
+			if row.is_finished_item:
+				self.assertIsNone(row.serial_no)
+				self.assertTrue(row.serial_and_batch_bundle)
+				for sn in get_serial_nos_from_bundle(row.serial_and_batch_bundle):
+					self.assertIn(sn, wo1_serial_nos)
+
+	@ERPNextTestSuite.change_settings("Manufacturing Settings", {"make_serial_no_batch_from_work_order": 1})
+	@ERPNextTestSuite.change_settings("Global Defaults", {"default_company": "_Test Company"})
+	def test_validate_fg_resets_invalid_batch_no_on_manufacture(self):
+		from erpnext.manufacturing.doctype.bom.test_bom import create_nested_bom
+		from erpnext.manufacturing.doctype.work_order.mapper import (
+			make_stock_entry as _make_stock_entry,
+		)
+		from erpnext.manufacturing.doctype.work_order.test_work_order import make_wo_order_test_record
+		from erpnext.stock.serial_batch_bundle import get_batches_from_bundle
+
+		fg_item = "_FG Batch No Item"
+		rm_item = "RM for Batch Item"
+		create_nested_bom({fg_item: {rm_item: {}}}, prefix="")
+
+		item = frappe.get_doc("Item", fg_item)
+		item.has_batch_no = 1
+		item.create_new_batch = 1
+		item.batch_number_series = "FBNI-.####"
+		item.save()
+
+		make_stock_entry(item_code=rm_item, target="_Test Warehouse - _TC", qty=20, basic_rate=100)
+
+		wo1 = make_wo_order_test_record(item=fg_item, qty=2, skip_transfer=True)
+		wo2 = make_wo_order_test_record(item=fg_item, qty=2, skip_transfer=True)
+		wo1_batches = frappe.get_all("Batch", filters={"reference_name": wo1.name}, pluck="name")
+		wo2_batches = frappe.get_all("Batch", filters={"reference_name": wo2.name}, pluck="name")
+
+		se = frappe.get_doc(_make_stock_entry(wo1.name, "Manufacture", 2))
+		for row in se.items:
+			if row.is_finished_item:
+				row.batch_no = wo2_batches[0]
+				row.serial_and_batch_bundle = None
+
+		se.save()
+
+		for row in se.items:
+			if row.is_finished_item:
+				self.assertIsNone(row.batch_no)
+				self.assertTrue(row.serial_and_batch_bundle)
+				for bn in list(get_batches_from_bundle(row.serial_and_batch_bundle).keys()):
+					self.assertIn(bn, wo1_batches)
 
 
 def make_serialized_item(self, **args):
