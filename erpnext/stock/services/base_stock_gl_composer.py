@@ -29,11 +29,11 @@ class BaseStockGLComposer(BaseGLComposer):
 			inventory_account_map = doc.get_inventory_account_map()
 
 		sle_map = doc.get_stock_ledger_details()
-		voucher_details = doc.get_voucher_details(default_expense_account, default_cost_center, sle_map)
+		voucher_details = self.get_voucher_details(default_expense_account, default_cost_center, sle_map)
 
 		gl_list = []
 		warehouse_with_no_account = []
-		precision = doc.get_debit_field_precision()
+		precision = self.get_debit_field_precision()
 
 		for item_row in voucher_details:
 			sle_list = sle_map.get(item_row.name)
@@ -45,7 +45,7 @@ class BaseStockGLComposer(BaseGLComposer):
 					if _inv_dict.get("account"):
 						sle_rounding_diff += flt(sle.stock_value_difference)
 
-						doc.check_expense_account(item_row)
+						self.check_expense_account(item_row)
 
 						if item_row.get("target_warehouse"):
 							_target_wh_inv_dict = doc.get_inventory_account_dict(
@@ -152,3 +152,78 @@ class BaseStockGLComposer(BaseGLComposer):
 		return process_gl_map(
 			gl_list, precision=precision, from_repost=frappe.flags.through_repost_item_valuation
 		)
+
+	def get_debit_field_precision(self):
+		if not frappe.flags.debit_field_precision:
+			frappe.flags.debit_field_precision = frappe.get_precision("GL Entry", "debit_in_account_currency")
+
+		return frappe.flags.debit_field_precision
+
+	def get_voucher_details(self, default_expense_account, default_cost_center, sle_map):
+		doc = self.doc
+		if doc.doctype == "Stock Reconciliation":
+			reconciliation_purpose = frappe.db.get_value(doc.doctype, doc.name, "purpose")
+			is_opening = "Yes" if reconciliation_purpose == "Opening Stock" else "No"
+			details = []
+			for voucher_detail_no in sle_map:
+				details.append(
+					frappe._dict(
+						{
+							"name": voucher_detail_no,
+							"expense_account": default_expense_account,
+							"cost_center": default_cost_center,
+							"is_opening": is_opening,
+						}
+					)
+				)
+			return details
+		else:
+			details = doc.get("items")
+
+			if default_expense_account or default_cost_center:
+				for d in details:
+					if default_expense_account and not d.get("expense_account"):
+						d.expense_account = default_expense_account
+					if default_cost_center and not d.get("cost_center"):
+						d.cost_center = default_cost_center
+
+			return details
+
+	def check_expense_account(self, item):
+		if not item.get("expense_account"):
+			msg = _("Please set an Expense Account in the Items table")
+			frappe.throw(
+				_("Row #{0}: Expense Account not set for the Item {1}. {2}").format(
+					item.idx, frappe.bold(item.item_code), msg
+				),
+				title=_("Expense Account Missing"),
+			)
+
+		else:
+			is_expense_account = (
+				frappe.get_cached_value("Account", item.get("expense_account"), "report_type")
+				== "Profit and Loss"
+			)
+			if (
+				self.doc.doctype
+				not in (
+					"Purchase Receipt",
+					"Purchase Invoice",
+					"Stock Reconciliation",
+					"Stock Entry",
+					"Subcontracting Receipt",
+					"Delivery Note",
+				)
+				and not is_expense_account
+			):
+				frappe.throw(
+					_("Expense / Difference account ({0}) must be a 'Profit or Loss' account").format(
+						item.get("expense_account")
+					)
+				)
+			if is_expense_account and not item.get("cost_center"):
+				frappe.throw(
+					_("{0} {1}: Cost Center is mandatory for Item {2}").format(
+						_(self.doc.doctype), self.doc.name, item.get("item_code")
+					)
+				)

@@ -252,41 +252,6 @@ class StockController(AccountsController):
 			inventory_account_map, default_expense_account, default_cost_center
 		)
 
-	def get_debit_field_precision(self):
-		if not frappe.flags.debit_field_precision:
-			frappe.flags.debit_field_precision = frappe.get_precision("GL Entry", "debit_in_account_currency")
-
-		return frappe.flags.debit_field_precision
-
-	def get_voucher_details(self, default_expense_account, default_cost_center, sle_map):
-		if self.doctype == "Stock Reconciliation":
-			reconciliation_purpose = frappe.db.get_value(self.doctype, self.name, "purpose")
-			is_opening = "Yes" if reconciliation_purpose == "Opening Stock" else "No"
-			details = []
-			for voucher_detail_no in sle_map:
-				details.append(
-					frappe._dict(
-						{
-							"name": voucher_detail_no,
-							"expense_account": default_expense_account,
-							"cost_center": default_cost_center,
-							"is_opening": is_opening,
-						}
-					)
-				)
-			return details
-		else:
-			details = self.get("items")
-
-			if default_expense_account or default_cost_center:
-				for d in details:
-					if default_expense_account and not d.get("expense_account"):
-						d.expense_account = default_expense_account
-					if default_cost_center and not d.get("cost_center"):
-						d.cost_center = default_cost_center
-
-			return details
-
 	def get_items_and_warehouses(self) -> tuple[list[str], list[str]]:
 		from erpnext.stock.services.stock_ledger import StockLedgerService
 
@@ -296,45 +261,6 @@ class StockController(AccountsController):
 		from erpnext.stock.services.stock_ledger import StockLedgerService
 
 		return StockLedgerService(self).get_stock_ledger_details()
-
-	def check_expense_account(self, item):
-		if not item.get("expense_account"):
-			msg = _("Please set an Expense Account in the Items table")
-			frappe.throw(
-				_("Row #{0}: Expense Account not set for the Item {1}. {2}").format(
-					item.idx, frappe.bold(item.item_code), msg
-				),
-				title=_("Expense Account Missing"),
-			)
-
-		else:
-			is_expense_account = (
-				frappe.get_cached_value("Account", item.get("expense_account"), "report_type")
-				== "Profit and Loss"
-			)
-			if (
-				self.doctype
-				not in (
-					"Purchase Receipt",
-					"Purchase Invoice",
-					"Stock Reconciliation",
-					"Stock Entry",
-					"Subcontracting Receipt",
-					"Delivery Note",
-				)
-				and not is_expense_account
-			):
-				frappe.throw(
-					_("Expense / Difference account ({0}) must be a 'Profit or Loss' account").format(
-						item.get("expense_account")
-					)
-				)
-			if is_expense_account and not item.get("cost_center"):
-				frappe.throw(
-					_("{0} {1}: Cost Center is mandatory for Item {2}").format(
-						_(self.doctype), self.name, item.get("item_code")
-					)
-				)
 
 	def delete_auto_created_batches(self):
 		from erpnext.stock.services.serial_batch_bundle import SerialBatchBundleService
