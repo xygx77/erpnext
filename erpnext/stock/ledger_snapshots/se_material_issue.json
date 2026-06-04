@@ -1,0 +1,46 @@
+{
+	"gl": [
+		{
+			"account": "Stock Adjustment - TCP1",
+			"account_currency": "INR",
+			"against": "Stock In Hand - TCP1",
+			"cost_center": "Main - TCP1",
+			"credit": 0.0,
+			"credit_in_account_currency": 0.0,
+			"debit": 750.0,
+			"debit_in_account_currency": 750.0,
+			"is_opening": "No",
+			"party": null,
+			"party_type": null,
+			"posting_date": "2024-01-15"
+		},
+		{
+			"account": "Stock In Hand - TCP1",
+			"account_currency": "INR",
+			"against": "Stock Adjustment - TCP1",
+			"cost_center": "Main - TCP1",
+			"credit": 750.0,
+			"credit_in_account_currency": 750.0,
+			"debit": 0.0,
+			"debit_in_account_currency": 0.0,
+			"is_opening": "No",
+			"party": null,
+			"party_type": null,
+			"posting_date": "2024-01-15"
+		}
+	],
+	"sle": [
+		{
+			"actual_qty": -5.0,
+			"incoming_rate": 0.0,
+			"item_code": "_Test Item",
+			"posting_date": "2024-01-15",
+			"qty_after_transaction": 0.0,
+			"stock_uom": "_Test UOM",
+			"stock_value": 0.0,
+			"stock_value_difference": -750.0,
+			"valuation_rate": 150.0,
+			"warehouse": "Stores - TCP1"
+		}
+	]
+}

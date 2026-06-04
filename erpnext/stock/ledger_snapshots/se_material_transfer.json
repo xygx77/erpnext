@@ -1,0 +1,29 @@
+{
+	"gl": [],
+	"sle": [
+		{
+			"actual_qty": -5.0,
+			"incoming_rate": 0.0,
+			"item_code": "_Test Item",
+			"posting_date": "2024-01-15",
+			"qty_after_transaction": 0.0,
+			"stock_uom": "_Test UOM",
+			"stock_value": 0.0,
+			"stock_value_difference": -500.0,
+			"valuation_rate": 100.0,
+			"warehouse": "Stores - TCP1"
+		},
+		{
+			"actual_qty": 5.0,
+			"incoming_rate": 100.0,
+			"item_code": "_Test Item",
+			"posting_date": "2024-01-15",
+			"qty_after_transaction": 5.0,
+			"stock_uom": "_Test UOM",
+			"stock_value": 500.0,
+			"stock_value_difference": 500.0,
+			"valuation_rate": 100.0,
+			"warehouse": "Finished Goods - TCP1"
+		}
+	]
+}
