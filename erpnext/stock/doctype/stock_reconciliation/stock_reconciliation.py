@@ -930,7 +930,7 @@ class StockReconciliation(StockController):
 			data.qty_after_transaction = 0.0
 			data.incoming_rate = flt(row.valuation_rate)
 
-		from erpnext.stock.services.stock_ledger import StockLedgerService
+		from erpnext.stock.services.stock_ledger_service import StockLedgerService
 
 		StockLedgerService(self).update_inventory_dimensions(row, data)
 

@@ -229,12 +229,12 @@ class StockController(AccountsController):
 		)
 
 	def get_items_and_warehouses(self) -> tuple[list[str], list[str]]:
-		from erpnext.stock.services.stock_ledger import StockLedgerService
+		from erpnext.stock.services.stock_ledger_service import StockLedgerService
 
 		return StockLedgerService(self).get_items_and_warehouses()
 
 	def get_stock_ledger_details(self):
-		from erpnext.stock.services.stock_ledger import StockLedgerService
+		from erpnext.stock.services.stock_ledger_service import StockLedgerService
 
 		return StockLedgerService(self).get_stock_ledger_details()
 
@@ -258,7 +258,7 @@ class StockController(AccountsController):
 		)
 
 	def get_sl_entries(self, d, args):
-		from erpnext.stock.services.stock_ledger import StockLedgerService
+		from erpnext.stock.services.stock_ledger_service import StockLedgerService
 
 		return StockLedgerService(self).get_sl_entries(d, args)
 
@@ -270,7 +270,7 @@ class StockController(AccountsController):
 		return get_item_account_wise_lcv_entries(self)
 
 	def make_sl_entries(self, sl_entries, allow_negative_stock=False, via_landed_cost_voucher=False):
-		from erpnext.stock.services.stock_ledger import StockLedgerService
+		from erpnext.stock.services.stock_ledger_service import StockLedgerService
 
 		return StockLedgerService(self).make_sl_entries(
 			sl_entries, allow_negative_stock, via_landed_cost_voucher
@@ -360,7 +360,7 @@ class StockController(AccountsController):
 				d.stock_uom_rate = d.rate / (d.conversion_factor or 1)
 
 	def repost_future_sle_and_gle(self, force=False, via_landed_cost_voucher=False):
-		from erpnext.stock.services.stock_ledger import StockLedgerService
+		from erpnext.stock.services.stock_ledger_service import StockLedgerService
 
 		return StockLedgerService(self).repost_future_sle_and_gle(force, via_landed_cost_voucher)
 
