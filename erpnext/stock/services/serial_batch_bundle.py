@@ -376,17 +376,14 @@ class SerialBatchBundleService:
 
 		return field, reference_ids
 
-	@frappe.request_cache
 	def is_serial_batch_item(self, item_code) -> bool:
-		if not frappe.db.exists("Item", item_code):
+		item_details = frappe.get_cached_value(
+			"Item", item_code, ["has_serial_no", "has_batch_no"], as_dict=True
+		)
+		if not item_details:
 			frappe.throw(_("Item {0} does not exist.").format(bold(item_code)))
 
-		item_details = frappe.db.get_value("Item", item_code, ["has_serial_no", "has_batch_no"], as_dict=1)
-
-		if item_details.has_serial_no or item_details.has_batch_no:
-			return True
-
-		return False
+		return bool(item_details.has_serial_no or item_details.has_batch_no)
 
 	def update_bundle_details(self, bundle_details, table_name, row, is_rejected=False, parent_details=None):
 		from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
