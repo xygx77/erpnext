@@ -434,7 +434,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 		for project in projects:
 			project_doc = frappe.get_doc("Project", project)
 			project_doc.set_consumed_material_cost()
-			project_doc.save()
+			project_doc.save(ignore_permissions=True)
 
 	def validate_item(self):
 		for item in self.get("items"):
