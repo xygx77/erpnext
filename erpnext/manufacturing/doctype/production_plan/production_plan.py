@@ -30,10 +30,7 @@ from erpnext.manufacturing.doctype.production_plan.services.material_request imp
 	get_warehouse_list,
 	set_default_warehouses,
 )
-from erpnext.manufacturing.doctype.production_plan.services.sales_order_sourcing import (
-	SalesOrderSourcingService,
-)
-from erpnext.manufacturing.doctype.production_plan.services.stock_reservation import (
+from erpnext.manufacturing.doctype.production_plan.services.reservation import (
 	cancel_stock_reservation_entries,
 	get_non_completed_production_plans,
 	get_reserved_qty_for_production_plan,
@@ -41,10 +38,13 @@ from erpnext.manufacturing.doctype.production_plan.services.stock_reservation im
 	make_stock_reservation_entries,
 	reserve_stock_for_production_plan,
 )
+from erpnext.manufacturing.doctype.production_plan.services.sales_order_planning import (
+	SalesOrderSourcingService,
+)
 from erpnext.manufacturing.doctype.production_plan.services.sub_assembly import (
 	SubAssemblyService,
 )
-from erpnext.manufacturing.doctype.production_plan.services.work_order_creation import (
+from erpnext.manufacturing.doctype.production_plan.services.work_order_planning import (
 	WorkOrderCreationService,
 )
 from erpnext.stock.utils import get_or_make_bin

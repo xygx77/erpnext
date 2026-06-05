@@ -22,7 +22,7 @@ from erpnext.manufacturing.doctype.production_plan.services.bom_explosion import
 	get_exploded_items,
 	get_subitems,
 )
-from erpnext.manufacturing.doctype.production_plan.services.planning_helpers import (
+from erpnext.manufacturing.doctype.production_plan.services.planning_queries import (
 	get_bin_details,
 	get_item_data,
 	get_sales_orders,
@@ -30,7 +30,7 @@ from erpnext.manufacturing.doctype.production_plan.services.planning_helpers imp
 	get_warehouse_list,
 	set_default_warehouses,
 )
-from erpnext.manufacturing.doctype.production_plan.services.sub_assembly_planning import (
+from erpnext.manufacturing.doctype.production_plan.services.sub_assembly_queries import (
 	get_raw_materials_of_sub_assembly_items,
 	get_sub_assembly_items,
 )

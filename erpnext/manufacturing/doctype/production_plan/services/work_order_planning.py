@@ -9,7 +9,7 @@ import frappe
 from frappe import _, msgprint
 from frappe.utils import flt, get_filtered_list_link, getdate, nowdate
 
-from erpnext.manufacturing.doctype.production_plan.services.planning_helpers import set_default_warehouses
+from erpnext.manufacturing.doctype.production_plan.services.planning_queries import set_default_warehouses
 
 _SUB_ASSEMBLY_WO_FIELDS = [
 	"production_item",

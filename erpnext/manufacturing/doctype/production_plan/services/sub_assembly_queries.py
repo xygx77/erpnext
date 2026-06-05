@@ -8,7 +8,7 @@ from frappe.query_builder.functions import IfNull, Sum
 from frappe.utils import flt
 
 from erpnext.manufacturing.doctype.bom.bom import get_children as get_bom_children
-from erpnext.manufacturing.doctype.production_plan.services.planning_helpers import (
+from erpnext.manufacturing.doctype.production_plan.services.planning_queries import (
 	get_bin_details,
 	get_uom_conversion_factor,
 )

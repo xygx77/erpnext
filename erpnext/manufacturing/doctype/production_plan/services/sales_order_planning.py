@@ -9,7 +9,7 @@ from frappe.query_builder.functions import IfNull
 from frappe.utils import flt, now_datetime
 from pypika.terms import ExistsCriterion
 
-from erpnext.manufacturing.doctype.production_plan.services.planning_helpers import get_sales_orders
+from erpnext.manufacturing.doctype.production_plan.services.planning_queries import get_sales_orders
 from erpnext.manufacturing.doctype.work_order.work_order import get_item_details
 
 

@@ -6,7 +6,7 @@
 import frappe
 from frappe.query_builder.functions import IfNull, Sum
 
-from erpnext.manufacturing.doctype.production_plan.services.planning_helpers import get_uom_conversion_factor
+from erpnext.manufacturing.doctype.production_plan.services.planning_queries import get_uom_conversion_factor
 
 
 def get_exploded_items(item_details, company, bom_no, include_non_stock_items, planned_qty=1, doc=None):

@@ -7,7 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from erpnext.manufacturing.doctype.production_plan.services.sub_assembly_planning import (
+from erpnext.manufacturing.doctype.production_plan.services.sub_assembly_queries import (
 	get_sub_assembly_items,
 )
 
