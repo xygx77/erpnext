@@ -981,78 +981,78 @@ class WorkOrder(Document):
 	def create_job_card_from_wo(self):
 		return OperationsService(self).create_job_card()
 
-	def update_required_items(self, *args, **kwargs):
-		return RequiredItemsService(self).update_required_items(*args, **kwargs)
+	def update_required_items(self):
+		return RequiredItemsService(self).update_required_items()
 
-	def update_reserved_qty_for_production(self, *args, **kwargs):
-		return RequiredItemsService(self).update_reserved_qty_for_production(*args, **kwargs)
+	def update_reserved_qty_for_production(self, items=None):
+		return RequiredItemsService(self).update_reserved_qty_for_production(items)
 
 	@frappe.whitelist()
-	def get_items_and_operations_from_bom(self, *args, **kwargs):
-		return RequiredItemsService(self).get_items_and_operations_from_bom(*args, **kwargs)
+	def get_items_and_operations_from_bom(self):
+		return RequiredItemsService(self).get_items_and_operations_from_bom()
 
-	def set_available_qty(self, *args, **kwargs):
-		return RequiredItemsService(self).set_available_qty(*args, **kwargs)
+	def set_available_qty(self):
+		return RequiredItemsService(self).set_available_qty()
 
-	def set_required_items(self, *args, **kwargs):
-		return RequiredItemsService(self).set_required_items(*args, **kwargs)
+	def set_required_items(self, reset_only_qty=False, reset_source_warehouse=False):
+		return RequiredItemsService(self).set_required_items(reset_only_qty, reset_source_warehouse)
 
-	def update_transferred_qty_for_required_items(self, *args, **kwargs):
-		return RequiredItemsService(self).update_transferred_qty_for_required_items(*args, **kwargs)
+	def update_transferred_qty_for_required_items(self):
+		return RequiredItemsService(self).update_transferred_qty_for_required_items()
 
-	def update_returned_qty(self, *args, **kwargs):
-		return RequiredItemsService(self).update_returned_qty(*args, **kwargs)
+	def update_returned_qty(self):
+		return RequiredItemsService(self).update_returned_qty()
 
-	def update_consumed_qty_for_required_items(self, *args, **kwargs):
-		return RequiredItemsService(self).update_consumed_qty_for_required_items(*args, **kwargs)
+	def update_consumed_qty_for_required_items(self):
+		return RequiredItemsService(self).update_consumed_qty_for_required_items()
 
-	def remove_additional_items(self, *args, **kwargs):
-		return RequiredItemsService(self).remove_additional_items(*args, **kwargs)
+	def remove_additional_items(self, stock_entry):
+		return RequiredItemsService(self).remove_additional_items(stock_entry)
 
-	def add_additional_items(self, *args, **kwargs):
-		return RequiredItemsService(self).add_additional_items(*args, **kwargs)
+	def add_additional_items(self, stock_entry):
+		return RequiredItemsService(self).add_additional_items(stock_entry)
 
-	def validate_work_order_against_so(self, *args, **kwargs):
-		return StatusService(self).validate_work_order_against_so(*args, **kwargs)
+	def validate_work_order_against_so(self):
+		return StatusService(self).validate_work_order_against_so()
 
-	def update_status(self, *args, **kwargs):
-		return StatusService(self).update_status(*args, **kwargs)
+	def update_status(self, status=None):
+		return StatusService(self).update_status(status)
 
-	def get_status(self, *args, **kwargs):
-		return StatusService(self).get_status(*args, **kwargs)
+	def get_status(self, status=None):
+		return StatusService(self).get_status(status)
 
-	def update_work_order_qty(self, *args, **kwargs):
-		return StatusService(self).update_work_order_qty(*args, **kwargs)
+	def update_work_order_qty(self):
+		return StatusService(self).update_work_order_qty()
 
-	def update_disassembled_qty(self, *args, **kwargs):
-		return StatusService(self).update_disassembled_qty(*args, **kwargs)
+	def update_disassembled_qty(self, qty, is_cancel=False):
+		return StatusService(self).update_disassembled_qty(qty, is_cancel)
 
-	def get_transferred_or_manufactured_qty(self, *args, **kwargs):
-		return StatusService(self).get_transferred_or_manufactured_qty(*args, **kwargs)
+	def get_transferred_or_manufactured_qty(self, purpose, fieldname):
+		return StatusService(self).get_transferred_or_manufactured_qty(purpose, fieldname)
 
-	def set_process_loss_qty(self, *args, **kwargs):
-		return StatusService(self).set_process_loss_qty(*args, **kwargs)
+	def set_process_loss_qty(self):
+		return StatusService(self).set_process_loss_qty()
 
-	def update_production_plan_status(self, *args, **kwargs):
-		return StatusService(self).update_production_plan_status(*args, **kwargs)
+	def update_production_plan_status(self):
+		return StatusService(self).update_production_plan_status()
 
-	def update_planned_qty(self, *args, **kwargs):
-		return StatusService(self).update_planned_qty(*args, **kwargs)
+	def update_planned_qty(self):
+		return StatusService(self).update_planned_qty()
 
-	def set_produced_qty_for_sub_assembly_item(self, *args, **kwargs):
-		return StatusService(self).set_produced_qty_for_sub_assembly_item(*args, **kwargs)
+	def set_produced_qty_for_sub_assembly_item(self):
+		return StatusService(self).set_produced_qty_for_sub_assembly_item()
 
-	def update_ordered_qty(self, *args, **kwargs):
-		return StatusService(self).update_ordered_qty(*args, **kwargs)
+	def update_ordered_qty(self):
+		return StatusService(self).update_ordered_qty()
 
-	def update_work_order_qty_in_so(self, *args, **kwargs):
-		return StatusService(self).update_work_order_qty_in_so(*args, **kwargs)
+	def update_work_order_qty_in_so(self):
+		return StatusService(self).update_work_order_qty_in_so()
 
-	def update_work_order_qty_in_combined_so(self, *args, **kwargs):
-		return StatusService(self).update_work_order_qty_in_combined_so(*args, **kwargs)
+	def update_work_order_qty_in_combined_so(self):
+		return StatusService(self).update_work_order_qty_in_combined_so()
 
-	def update_completed_qty_in_material_request(self, *args, **kwargs):
-		return StatusService(self).update_completed_qty_in_material_request(*args, **kwargs)
+	def update_completed_qty_in_material_request(self):
+		return StatusService(self).update_completed_qty_in_material_request()
 
 
 @frappe.whitelist()

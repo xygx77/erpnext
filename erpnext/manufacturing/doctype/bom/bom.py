@@ -975,11 +975,11 @@ class BOM(WebsiteGenerator):
 			d.get("secondary_item_type") == "Scrap" or d.get("is_legacy") for d in self.get("secondary_items")
 		)
 
-	def validate_bom_currency(self, *args, **kwargs):
-		return BOMCostingService(self).validate_bom_currency(*args, **kwargs)
+	def validate_bom_currency(self, item):
+		return BOMCostingService(self).validate_bom_currency(item)
 
-	def get_rm_rate(self, *args, **kwargs):
-		return BOMCostingService(self).get_rm_rate(*args, **kwargs)
+	def get_rm_rate(self, arg, notify=True):
+		return BOMCostingService(self).get_rm_rate(arg, notify)
 
 	@frappe.whitelist()
 	def update_cost(
@@ -996,47 +996,47 @@ class BOM(WebsiteGenerator):
 			save=save,
 		)
 
-	def update_parent_cost(self, *args, **kwargs):
-		return BOMCostingService(self).update_parent_cost(*args, **kwargs)
+	def update_parent_cost(self):
+		return BOMCostingService(self).update_parent_cost()
 
-	def get_bom_unitcost(self, *args, **kwargs):
-		return BOMCostingService(self).get_bom_unitcost(*args, **kwargs)
+	def get_bom_unitcost(self, bom_no):
+		return BOMCostingService(self).get_bom_unitcost(bom_no)
 
-	def calculate_cost(self, *args, **kwargs):
-		return BOMCostingService(self).calculate_cost(*args, **kwargs)
+	def calculate_cost(self, save_updates=False, update_hour_rate=False):
+		return BOMCostingService(self).calculate_cost(save_updates, update_hour_rate)
 
-	def calculate_op_cost(self, *args, **kwargs):
-		return BOMCostingService(self).calculate_op_cost(*args, **kwargs)
+	def calculate_op_cost(self, update_hour_rate=False):
+		return BOMCostingService(self).calculate_op_cost(update_hour_rate)
 
-	def update_rate_and_time(self, *args, **kwargs):
-		return BOMCostingService(self).update_rate_and_time(*args, **kwargs)
+	def update_rate_and_time(self, row, update_hour_rate=False):
+		return BOMCostingService(self).update_rate_and_time(row, update_hour_rate)
 
-	def calculate_rm_cost(self, *args, **kwargs):
-		return BOMCostingService(self).calculate_rm_cost(*args, **kwargs)
+	def calculate_rm_cost(self, save=False):
+		return BOMCostingService(self).calculate_rm_cost(save)
 
-	def calculate_secondary_items_costs(self, *args, **kwargs):
-		return BOMCostingService(self).calculate_secondary_items_costs(*args, **kwargs)
+	def calculate_secondary_items_costs(self, save=False):
+		return BOMCostingService(self).calculate_secondary_items_costs(save)
 
-	def calculate_exploded_cost(self, *args, **kwargs):
-		return BOMCostingService(self).calculate_exploded_cost(*args, **kwargs)
+	def calculate_exploded_cost(self):
+		return BOMCostingService(self).calculate_exploded_cost()
 
-	def get_rm_rate_map(self, *args, **kwargs):
-		return BOMCostingService(self).get_rm_rate_map(*args, **kwargs)
+	def get_rm_rate_map(self):
+		return BOMCostingService(self).get_rm_rate_map()
 
-	def update_exploded_items(self, *args, **kwargs):
-		return BOMExplodedItemsService(self).update_exploded_items(*args, **kwargs)
+	def update_exploded_items(self, save=True):
+		return BOMExplodedItemsService(self).update_exploded_items(save)
 
-	def get_exploded_items(self, *args, **kwargs):
-		return BOMExplodedItemsService(self).get_exploded_items(*args, **kwargs)
+	def get_exploded_items(self):
+		return BOMExplodedItemsService(self).get_exploded_items()
 
-	def add_to_cur_exploded_items(self, *args, **kwargs):
-		return BOMExplodedItemsService(self).add_to_cur_exploded_items(*args, **kwargs)
+	def add_to_cur_exploded_items(self, args):
+		return BOMExplodedItemsService(self).add_to_cur_exploded_items(args)
 
-	def get_child_exploded_items(self, *args, **kwargs):
-		return BOMExplodedItemsService(self).get_child_exploded_items(*args, **kwargs)
+	def get_child_exploded_items(self, bom_no, stock_qty, operation=None):
+		return BOMExplodedItemsService(self).get_child_exploded_items(bom_no, stock_qty, operation)
 
-	def add_exploded_items(self, *args, **kwargs):
-		return BOMExplodedItemsService(self).add_exploded_items(*args, **kwargs)
+	def add_exploded_items(self, save=True):
+		return BOMExplodedItemsService(self).add_exploded_items(save)
 
 
 def _get_bom_children(bom_no):

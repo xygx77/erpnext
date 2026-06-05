@@ -373,44 +373,48 @@ class ProductionPlan(Document):
 				self.status = "Material Requested"
 				break
 
-	def get_production_items(self, *args, **kwargs):
-		return WorkOrderCreationService(self).get_production_items(*args, **kwargs)
+	def get_production_items(self):
+		return WorkOrderCreationService(self).get_production_items()
 
 	@frappe.whitelist()
 	def make_work_order(self):
 		return WorkOrderCreationService(self).make_work_order()
 
-	def make_work_order_for_finished_goods(self, *args, **kwargs):
-		return WorkOrderCreationService(self).make_work_order_for_finished_goods(*args, **kwargs)
+	def make_work_order_for_finished_goods(self, wo_list, default_warehouses):
+		return WorkOrderCreationService(self).make_work_order_for_finished_goods(wo_list, default_warehouses)
 
-	def make_work_order_for_subassembly_items(self, *args, **kwargs):
-		return WorkOrderCreationService(self).make_work_order_for_subassembly_items(*args, **kwargs)
+	def make_work_order_for_subassembly_items(self, wo_list, subcontracted_po, default_warehouses):
+		return WorkOrderCreationService(self).make_work_order_for_subassembly_items(
+			wo_list, subcontracted_po, default_warehouses
+		)
 
-	def prepare_data_for_sub_assembly_items(self, *args, **kwargs):
-		return WorkOrderCreationService(self).prepare_data_for_sub_assembly_items(*args, **kwargs)
+	def prepare_data_for_sub_assembly_items(self, row, wo_data):
+		return WorkOrderCreationService(self).prepare_data_for_sub_assembly_items(row, wo_data)
 
-	def make_subcontracted_purchase_order(self, *args, **kwargs):
-		return WorkOrderCreationService(self).make_subcontracted_purchase_order(*args, **kwargs)
+	def make_subcontracted_purchase_order(self, subcontracted_po, purchase_orders):
+		return WorkOrderCreationService(self).make_subcontracted_purchase_order(
+			subcontracted_po, purchase_orders
+		)
 
-	def show_list_created_message(self, *args, **kwargs):
-		return WorkOrderCreationService(self).show_list_created_message(*args, **kwargs)
+	def show_list_created_message(self, doctype, doc_list=None):
+		return WorkOrderCreationService(self).show_list_created_message(doctype, doc_list)
 
-	def create_work_order(self, *args, **kwargs):
-		return WorkOrderCreationService(self).create_work_order(*args, **kwargs)
+	def create_work_order(self, item):
+		return WorkOrderCreationService(self).create_work_order(item)
 
 	@frappe.whitelist()
 	def get_open_sales_orders(self):
 		return SalesOrderSourcingService(self).get_open_sales_orders()
 
-	def add_so_in_table(self, *args, **kwargs):
-		return SalesOrderSourcingService(self).add_so_in_table(*args, **kwargs)
+	def add_so_in_table(self, open_so):
+		return SalesOrderSourcingService(self).add_so_in_table(open_so)
 
 	@frappe.whitelist()
 	def get_pending_material_requests(self):
 		return SalesOrderSourcingService(self).get_pending_material_requests()
 
-	def add_mr_in_table(self, *args, **kwargs):
-		return SalesOrderSourcingService(self).add_mr_in_table(*args, **kwargs)
+	def add_mr_in_table(self, pending_mr):
+		return SalesOrderSourcingService(self).add_mr_in_table(pending_mr)
 
 	@frappe.whitelist()
 	def combine_so_items(self):
@@ -420,26 +424,26 @@ class ProductionPlan(Document):
 	def get_items(self):
 		return SalesOrderSourcingService(self).get_items()
 
-	def get_so_mr_list(self, *args, **kwargs):
-		return SalesOrderSourcingService(self).get_so_mr_list(*args, **kwargs)
+	def get_so_mr_list(self, field, table):
+		return SalesOrderSourcingService(self).get_so_mr_list(field, table)
 
-	def get_bom_item_condition(self, *args, **kwargs):
-		return SalesOrderSourcingService(self).get_bom_item_condition(*args, **kwargs)
+	def get_bom_item_condition(self):
+		return SalesOrderSourcingService(self).get_bom_item_condition()
 
-	def get_so_items(self, *args, **kwargs):
-		return SalesOrderSourcingService(self).get_so_items(*args, **kwargs)
+	def get_so_items(self):
+		return SalesOrderSourcingService(self).get_so_items()
 
-	def get_mr_items(self, *args, **kwargs):
-		return SalesOrderSourcingService(self).get_mr_items(*args, **kwargs)
+	def get_mr_items(self):
+		return SalesOrderSourcingService(self).get_mr_items()
 
-	def add_items(self, *args, **kwargs):
-		return SalesOrderSourcingService(self).add_items(*args, **kwargs)
+	def add_items(self, items):
+		return SalesOrderSourcingService(self).add_items(items)
 
-	def add_pp_ref(self, *args, **kwargs):
-		return SalesOrderSourcingService(self).add_pp_ref(*args, **kwargs)
+	def add_pp_ref(self, refs):
+		return SalesOrderSourcingService(self).add_pp_ref(refs)
 
-	def validate_mr_subcontracted(self, *args, **kwargs):
-		return MaterialRequestService(self).validate_mr_subcontracted(*args, **kwargs)
+	def validate_mr_subcontracted(self):
+		return MaterialRequestService(self).validate_mr_subcontracted()
 
 	@frappe.whitelist()
 	def make_material_request(self):
@@ -449,14 +453,16 @@ class ProductionPlan(Document):
 	def get_sub_assembly_items(self, manufacturing_type: str | None = None):
 		return SubAssemblyService(self).get_sub_assembly_items(manufacturing_type=manufacturing_type)
 
-	def set_sub_assembly_items_based_on_level(self, *args, **kwargs):
-		return SubAssemblyService(self).set_sub_assembly_items_based_on_level(*args, **kwargs)
+	def set_sub_assembly_items_based_on_level(self, row, bom_data, manufacturing_type=None):
+		return SubAssemblyService(self).set_sub_assembly_items_based_on_level(
+			row, bom_data, manufacturing_type
+		)
 
-	def set_default_supplier_for_subcontracting_order(self, *args, **kwargs):
-		return SubAssemblyService(self).set_default_supplier_for_subcontracting_order(*args, **kwargs)
+	def set_default_supplier_for_subcontracting_order(self):
+		return SubAssemblyService(self).set_default_supplier_for_subcontracting_order()
 
-	def combine_subassembly_items(self, *args, **kwargs):
-		return SubAssemblyService(self).combine_subassembly_items(*args, **kwargs)
+	def combine_subassembly_items(self, sub_assembly_items_store):
+		return SubAssemblyService(self).combine_subassembly_items(sub_assembly_items_store)
 
-	def all_items_completed(self, *args, **kwargs):
-		return SubAssemblyService(self).all_items_completed(*args, **kwargs)
+	def all_items_completed(self):
+		return SubAssemblyService(self).all_items_completed()
