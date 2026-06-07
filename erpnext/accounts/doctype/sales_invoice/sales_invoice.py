@@ -26,7 +26,9 @@ from erpnext.accounts.utils import update_voucher_outstanding
 from erpnext.controllers.accounts_controller import validate_account_head
 from erpnext.controllers.selling_controller import SellingController
 from erpnext.setup.doctype.company.company import update_company_current_month_sales
-from erpnext.stock.doctype.delivery_note.delivery_note import update_billed_amount_based_on_so
+from erpnext.stock.doctype.delivery_note.services.billing_status import (
+	update_billed_amount_based_on_so,
+)
 
 from .services.fixed_assets import FixedAssetService
 from .services.inter_company import (
