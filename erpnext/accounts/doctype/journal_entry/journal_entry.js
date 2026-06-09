@@ -178,7 +178,7 @@ frappe.ui.form.on("Journal Entry", {
 					voucher_type: frm.doc.voucher_type,
 					company: args.company,
 				},
-				method: "erpnext.accounts.doctype.journal_entry.journal_entry.make_inter_company_journal_entry",
+				method: "erpnext.accounts.doctype.journal_entry.mapper.make_inter_company_journal_entry",
 				callback: function (r) {
 					if (r.message) {
 						var doc = frappe.model.sync(r.message)[0];
@@ -731,7 +731,7 @@ $.extend(erpnext.journal_entry, {
 
 	reverse_journal_entry: function (frm) {
 		frappe.model.open_mapped_doc({
-			method: "erpnext.accounts.doctype.journal_entry.journal_entry.make_reverse_journal_entry",
+			method: "erpnext.accounts.doctype.journal_entry.mapper.make_reverse_journal_entry",
 			frm: frm,
 		});
 	},
