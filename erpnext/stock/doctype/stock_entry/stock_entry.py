@@ -327,6 +327,9 @@ class StockEntry(StockController, SubcontractingInwardController):
 		self.make_bundle_using_old_serial_batch_fields()
 		self.adjust_stock_reservation_entries_for_return()
 		self.update_stock_reservation_entries()
+		# Release the Work Order's own reservation for items being sent to the subcontractor
+		# before the negative-stock guard runs in update_stock_ledger().
+		self.update_wo_reservation_for_subcontracting()
 		self.update_stock_ledger()
 		self.make_stock_reserve_for_wip_and_fg()
 		self.reserve_stock_for_subcontracting()
@@ -368,6 +371,8 @@ class StockEntry(StockController, SubcontractingInwardController):
 		self.update_quality_inspection()
 		self.adjust_stock_reservation_entries_for_return()
 		self.update_stock_reservation_entries()
+		# Recompute (now excludes this cancelled entry) so the freed reservation is restored.
+		self.update_wo_reservation_for_subcontracting()
 		self.delete_auto_created_batches()
 		self.delete_linked_stock_entry()
 		super().on_cancel_subcontracting_inward()
@@ -1122,6 +1127,19 @@ class StockEntry(StockController, SubcontractingInwardController):
 			return True
 
 		return False
+
+	def update_wo_reservation_for_subcontracting(self):
+		from erpnext.manufacturing.doctype.work_order.services.stock_reservation import (
+			StockReservationService,
+		)
+
+		if (
+			self.purpose == "Send to Subcontractor"
+			and self.work_order
+			and frappe.get_cached_value("Work Order", self.work_order, "reserve_stock")
+		):
+			pro_doc = frappe.get_doc("Work Order", self.work_order)
+			StockReservationService(pro_doc).release_reserved_qty_for_subcontract_transfer()
 
 	@frappe.whitelist()
 	def get_item_details(self, args: ItemDetailsCtx | None = None, for_update: bool = False):

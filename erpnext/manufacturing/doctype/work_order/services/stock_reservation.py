@@ -433,6 +433,68 @@ class StockReservationService:
 			if sre_list:
 				unreserve_stock_for_work_order(self.doc, sre_list)
 
+	def release_reserved_qty_for_subcontract_transfer(self):
+		"""Free this Work Order's own reservation for items sent to a subcontractor.
+
+		A ``Send to Subcontractor`` Stock Entry raised against a Work Order consumes stock that
+		the same Work Order reserved (e.g. the semi-finished item of a subcontracted operation).
+		The sent qty is recorded as ``transferred_qty`` on the matching Stock Reservation Entries
+		so the negative-stock guard stops treating it as reserved for "other transactions". The
+		figure is recomputed from every submitted ``Send to Subcontractor`` entry for the Work
+		Order, so it self-corrects on cancellation / reposting.
+
+		Note: only qty-based reservations are handled here; serial/batch reservations are left to
+		the existing material-transfer machinery.
+		"""
+		remaining = self._subcontract_transferred_qty_by_item()
+		if not remaining:
+			return
+
+		entries = frappe.get_all(
+			"Stock Reservation Entry",
+			filters={"voucher_no": self.doc.name, "voucher_type": "Work Order", "docstatus": 1},
+			fields=["name", "item_code", "warehouse", "reservation_based_on"],
+			order_by="creation",
+		)
+
+		for entry in entries:
+			if entry.reservation_based_on == "Serial and Batch":
+				continue
+
+			key = (entry.item_code, entry.warehouse)
+			if key not in remaining:
+				continue
+
+			sre = frappe.get_doc("Stock Reservation Entry", entry.name)
+			qty_to_update = max(min(flt(remaining[key]), flt(sre.reserved_qty) - flt(sre.consumed_qty)), 0.0)
+			remaining[key] = flt(remaining[key]) - qty_to_update
+
+			sre.db_set("transferred_qty", qty_to_update, update_modified=False)
+			sre.update_status()
+			sre.update_reserved_stock_in_bin()
+
+	def _subcontract_transferred_qty_by_item(self):
+		# Include cancelled (docstatus 2) entries so an item that was sent and then cancelled stays
+		# in the map (with a recomputed qty of 0), letting release_reserved_qty_for_subcontract_transfer
+		# reset its reservation. Only submitted (docstatus 1) rows contribute to the qty.
+		ste = frappe.qb.DocType("Stock Entry")
+		ste_child = frappe.qb.DocType("Stock Entry Detail")
+		submitted_qty = Case().when(ste.docstatus == 1, ste_child.transfer_qty).else_(0)
+		rows = (
+			frappe.qb.from_(ste)
+			.inner_join(ste_child)
+			.on(ste_child.parent == ste.name)
+			.select(ste_child.item_code, ste_child.s_warehouse, fn.Sum(submitted_qty).as_("qty"))
+			.where(
+				(ste.docstatus.isin([1, 2]))
+				& (ste.work_order == self.doc.name)
+				& (ste.purpose == "Send to Subcontractor")
+				& (ste_child.s_warehouse.isnotnull())
+			)
+			.groupby(ste_child.item_code, ste_child.s_warehouse)
+		).run(as_dict=1)
+		return {(d.item_code, d.s_warehouse): flt(d.qty) for d in rows}
+
 
 @frappe.whitelist()
 def make_stock_reservation_entries(

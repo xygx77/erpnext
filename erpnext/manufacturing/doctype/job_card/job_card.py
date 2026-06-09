@@ -926,6 +926,9 @@ class JobCard(Document):
 			)
 
 	def validate_time_logs_present(self):
+		if self.track_semi_finished_goods and self.is_subcontracted:
+			return
+
 		if not self.time_logs:
 			frappe.throw(
 				_("Time logs are required for {0} {1}").format(
@@ -940,6 +943,9 @@ class JobCard(Document):
 					)
 
 	def validate_completed_qty_matches_for_quantity(self):
+		if self.track_semi_finished_goods and self.is_subcontracted:
+			return
+
 		precision = self.precision("total_completed_qty")
 		total_completed_qty = flt(
 			flt(self.total_completed_qty, precision)

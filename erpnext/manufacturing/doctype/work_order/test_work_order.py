@@ -3417,6 +3417,93 @@ class TestWorkOrder(ERPNextTestSuite):
 
 		self.assertRaises(frappe.ValidationError, transfer_entry.submit)
 
+	@ERPNextTestSuite.change_settings(
+		"Buying Settings",
+		{"backflush_raw_materials_of_subcontract_based_on": "Material Transferred for Subcontract"},
+	)
+	def test_send_to_subcontractor_can_consume_work_order_reserved_stock(self):
+		# Regression for #55756: a "Send to Subcontractor" Stock Entry raised against a Work Order
+		# must be allowed to consume stock that the *same* Work Order reserved. Before the fix the
+		# negative-stock guard treated the WO's own reservation as "reserved for other
+		# transactions" and blocked the entry.
+		#
+		# Backflush is set to "Material Transferred for Subcontract" so the subcontract-order
+		# validation is a no-op: the default "BOM" path dereferences a Subcontracting Order, which
+		# this standalone entry does not have. The transfer path only needs `subcontracted_item`.
+		from erpnext.stock.doctype.stock_entry.stock_entry_utils import (
+			make_stock_entry as make_stock_entry_test_record,
+		)
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+
+		production_item = make_item("Test S2S Reservation FG", {"is_stock_item": 1}).name
+		rm_item = make_item("Test S2S Reservation RM", {"is_stock_item": 1}).name
+		source_warehouse = "Stores - _TC"
+		supplier_warehouse = create_warehouse("Test S2S Supplier WH", company="_Test Company")
+
+		bom = make_bom(
+			item=production_item,
+			source_warehouse=source_warehouse,
+			raw_materials=[rm_item],
+			operating_cost_per_bom_quantity=100,
+			do_not_submit=True,
+		)
+		for row in bom.exploded_items:
+			make_stock_entry_test_record(
+				item_code=row.item_code, target=source_warehouse, qty=10, basic_rate=100
+			)
+		bom.save()
+		bom.submit()
+
+		wo = make_wo_order_test_record(
+			item=production_item,
+			qty=10,
+			reserve_stock=1,
+			source_warehouse=source_warehouse,
+		)
+
+		sre_name = frappe.db.get_value(
+			"Stock Reservation Entry",
+			{"voucher_no": wo.name, "item_code": rm_item, "warehouse": source_warehouse},
+		)
+		self.assertTrue(sre_name, "Work Order should have reserved the raw material")
+		self.assertEqual(frappe.db.get_value("Stock Reservation Entry", sre_name, "reserved_qty"), 10)
+
+		# Send the reserved raw material to the subcontractor against the same Work Order.
+		ste = frappe.new_doc("Stock Entry")
+		ste.purpose = "Send to Subcontractor"
+		ste.stock_entry_type = "Send to Subcontractor"
+		ste.company = "_Test Company"
+		ste.work_order = wo.name
+		ste.append(
+			"items",
+			{
+				"item_code": rm_item,
+				"qty": 10,
+				"uom": "Nos",
+				"stock_uom": "Nos",
+				"conversion_factor": 1,
+				"s_warehouse": source_warehouse,
+				"t_warehouse": supplier_warehouse,
+				"basic_rate": 100,
+				"subcontracted_item": production_item,
+			},
+		)
+		ste.insert()
+
+		# Must submit without raising NegativeStockError ("reserved for other transactions").
+		ste.submit()
+
+		# The reservation is freed: transferred_qty == sent qty and the SRE is Closed.
+		sre = frappe.get_doc("Stock Reservation Entry", sre_name)
+		self.assertEqual(sre.transferred_qty, 10)
+		self.assertEqual(sre.status, "Closed")
+
+		# Cancelling the entry restores the reservation.
+		ste.cancel()
+		sre.reload()
+		self.assertEqual(sre.transferred_qty, 0)
+		self.assertEqual(sre.status, "Reserved")
+
 	def test_stock_reservation_for_batched_raw_material(self):
 		from erpnext.stock.doctype.stock_entry.stock_entry_utils import (
 			make_stock_entry as make_stock_entry_test_record,
