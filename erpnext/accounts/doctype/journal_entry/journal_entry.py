@@ -11,7 +11,6 @@ from frappe.model.document import Document
 from frappe.utils import comma_and, cstr, flt, fmt_money, formatdate, get_link_to_form, nowdate
 
 import erpnext
-from erpnext.accounts.deferred_revenue import get_deferred_booking_accounts
 from erpnext.accounts.doctype.invoice_discounting.invoice_discounting import (
 	get_party_account_based_on_invoice_discounting,
 )
@@ -33,13 +32,6 @@ from erpnext.assets.doctype.asset_depreciation_schedule.asset_depreciation_sched
 )
 from erpnext.controllers.accounts_controller import AccountsController
 from erpnext.setup.utils import get_exchange_rate as _get_exchange_rate
-
-REFERENCE_PARTY_ACCOUNT_FIELDS = {
-	"Sales Invoice": ["Customer", "Debit To"],
-	"Purchase Invoice": ["Supplier", "Credit To"],
-	"Sales Order": ["Customer"],
-	"Purchase Order": ["Supplier"],
-}
 
 
 class StockAccountInvalidTransaction(frappe.ValidationError):
@@ -132,6 +124,10 @@ class JournalEntry(AccountsController):
 		super().__init__(*args, **kwargs)
 
 	def validate(self):
+		from erpnext.accounts.doctype.journal_entry.services.reference_validator import (
+			JournalEntryReferenceValidator,
+		)
+
 		if self.voucher_type == "Opening Entry":
 			self.is_opening = "Yes"
 
@@ -151,7 +147,7 @@ class JournalEntry(AccountsController):
 			self.validate_against_jv()
 			self.validate_stock_accounts()
 
-		self.validate_reference_doc()
+		JournalEntryReferenceValidator(self).validate()
 		if self.docstatus == 0:
 			self.set_against_account()
 		self.create_remarks()
@@ -747,162 +743,6 @@ class JournalEntry(AccountsController):
 								d.reference_name, dr_or_cr
 							)
 						)
-
-	def validate_reference_doc(self):
-		"""Validates reference document"""
-		self.reference_totals = {}
-		self.reference_types = {}
-		self.reference_accounts = {}
-		for d in self.get("accounts"):
-			self._normalize_reference_fields(d)
-			if not self._has_party_reference(d):
-				continue
-			self._validate_order_direction(d)
-			self._register_reference(d)
-			self._validate_reference_party_and_account(d)
-
-		self.validate_orders()
-		self.validate_invoices()
-
-	def _normalize_reference_fields(self, row):
-		if not row.reference_type:
-			row.reference_name = None
-		if not row.reference_name:
-			row.reference_type = None
-
-	def _has_party_reference(self, row):
-		return bool(
-			row.reference_type and row.reference_name and row.reference_type in REFERENCE_PARTY_ACCOUNT_FIELDS
-		)
-
-	def _reference_amount_field(self, row):
-		if row.reference_type in ("Sales Order", "Sales Invoice"):
-			return "credit_in_account_currency"
-		return "debit_in_account_currency"
-
-	def _validate_order_direction(self, row):
-		if row.reference_type == "Sales Order" and flt(row.debit) > 0:
-			frappe.throw(
-				_("Row {0}: Debit entry can not be linked with a {1}").format(row.idx, row.reference_type)
-			)
-		if row.reference_type == "Purchase Order" and flt(row.credit) > 0:
-			frappe.throw(
-				_("Row {0}: Credit entry can not be linked with a {1}").format(row.idx, row.reference_type)
-			)
-
-	def _register_reference(self, row):
-		if row.reference_name not in self.reference_totals:
-			self.reference_totals[row.reference_name] = 0.0
-		if self.voucher_type not in ("Deferred Revenue", "Deferred Expense"):
-			self.reference_totals[row.reference_name] += flt(row.get(self._reference_amount_field(row)))
-		self.reference_types[row.reference_name] = row.reference_type
-		self.reference_accounts[row.reference_name] = row.account
-
-	def _validate_reference_party_and_account(self, row):
-		party_fields = REFERENCE_PARTY_ACCOUNT_FIELDS[row.reference_type]
-		against_voucher = frappe.db.get_value(
-			row.reference_type, row.reference_name, [scrub(f) for f in party_fields]
-		)
-		if not against_voucher:
-			frappe.throw(_("Row {0}: Invalid reference {1}").format(row.idx, row.reference_name))
-
-		if row.reference_type in ("Sales Invoice", "Purchase Invoice"):
-			self._validate_invoice_party_and_account(row, against_voucher, party_fields)
-		elif row.reference_type in ("Sales Order", "Purchase Order"):
-			self._validate_order_party(row, against_voucher)
-
-	def _validate_invoice_party_and_account(self, row, against_voucher, party_fields):
-		party_account, against_party = self._resolve_invoice_party_account(row, against_voucher)
-		if self.voucher_type == "Exchange Gain Or Loss":
-			return
-		if against_party != cstr(row.party) or party_account != row.account:
-			frappe.throw(
-				_("Row {0}: Party / Account does not match with {1} / {2} in {3} {4}").format(
-					row.idx, party_fields[0], party_fields[1], row.reference_type, row.reference_name
-				)
-			)
-
-	def _resolve_invoice_party_account(self, row, against_voucher):
-		if self.voucher_type in ("Deferred Revenue", "Deferred Expense") and row.reference_detail_no:
-			debit_or_credit = "Debit" if row.debit else "Credit"
-			party_account = get_deferred_booking_accounts(
-				row.reference_type, row.reference_detail_no, debit_or_credit
-			)
-			return party_account, ""
-		if row.reference_type == "Sales Invoice":
-			party_account = (
-				get_party_account_based_on_invoice_discounting(row.reference_name) or against_voucher[1]
-			)
-		else:
-			party_account = against_voucher[1]
-		return party_account, against_voucher[0]
-
-	def _validate_order_party(self, row, against_voucher):
-		if against_voucher != row.party:
-			frappe.throw(
-				_("Row {0}: {1} {2} does not match with {3}").format(
-					row.idx, row.party_type, row.party, row.reference_type
-				)
-			)
-
-	def validate_orders(self):
-		"""Validate totals, closed and docstatus for orders"""
-		for reference_name, total in self.reference_totals.items():
-			reference_type = self.reference_types[reference_name]
-			account = self.reference_accounts[reference_name]
-
-			if reference_type in ("Sales Order", "Purchase Order"):
-				order = frappe.get_doc(reference_type, reference_name)
-
-				if order.docstatus != 1:
-					frappe.throw(_("{0} {1} is not submitted").format(reference_type, reference_name))
-
-				if flt(order.per_billed) >= 100:
-					frappe.throw(_("{0} {1} is fully billed").format(reference_type, reference_name))
-
-				if cstr(order.status) == "Closed":
-					frappe.throw(_("{0} {1} is closed").format(reference_type, reference_name))
-
-				account_currency = get_account_currency(account)
-				if account_currency == self.company_currency:
-					voucher_total = order.base_grand_total
-					formatted_voucher_total = fmt_money(
-						voucher_total, order.precision("base_grand_total"), currency=account_currency
-					)
-				else:
-					voucher_total = order.grand_total
-					formatted_voucher_total = fmt_money(
-						voucher_total, order.precision("grand_total"), currency=account_currency
-					)
-
-				if flt(voucher_total) < (flt(order.advance_paid) + total):
-					frappe.throw(
-						_("Advance paid against {0} {1} cannot be greater than Grand Total {2}").format(
-							reference_type, reference_name, formatted_voucher_total
-						)
-					)
-
-	def validate_invoices(self):
-		"""Validate totals and docstatus for invoices"""
-		for reference_name, total in self.reference_totals.items():
-			reference_type = self.reference_types[reference_name]
-
-			if reference_type in ("Sales Invoice", "Purchase Invoice") and self.voucher_type not in [
-				"Debit Note",
-				"Credit Note",
-			]:
-				invoice = frappe.get_doc(reference_type, reference_name)
-
-				if invoice.docstatus != 1:
-					frappe.throw(_("{0} {1} is not submitted").format(reference_type, reference_name))
-
-				precision = invoice.precision("outstanding_amount")
-				if total and flt(invoice.outstanding_amount, precision) < flt(total, precision):
-					frappe.throw(
-						_("Payment against {0} {1} cannot be greater than Outstanding Amount {2}").format(
-							reference_type, reference_name, invoice.outstanding_amount
-						)
-					)
 
 	def set_against_account(self):
 		accounts_debited, accounts_credited = [], []
