@@ -812,7 +812,7 @@ class JournalEntry(AccountsController):
 
 		self.set_total_amount(total_amount, currency)
 
-	def set_total_amount(self, amt, currency):
+	def set_total_amount(self, amt: float, currency: str) -> None:
 		self.total_amount = amt
 		self.total_amount_currency = currency
 		from frappe.utils import money_in_words
@@ -824,7 +824,7 @@ class JournalEntry(AccountsController):
 
 		return JournalEntryGLComposer(self).compose()
 
-	def make_gl_entries(self, cancel=0, adv_adj=0):
+	def make_gl_entries(self, cancel: int = 0, adv_adj: int = 0) -> None:
 		from erpnext.accounts.general_ledger import make_gl_entries
 
 		merge_entries = frappe.get_single_value("Accounts Settings", "merge_similar_account_heads")
@@ -848,7 +848,7 @@ class JournalEntry(AccountsController):
 				cancel_exchange_gain_loss_journal(frappe._dict(doctype=self.doctype, name=self.name))
 
 	@frappe.whitelist()
-	def get_balance(self, difference_account: str | None = None):
+	def get_balance(self, difference_account: str | None = None) -> None:
 		if not self.get("accounts"):
 			msgprint(_("'Entries' cannot be empty"), raise_exception=True)
 		else:
@@ -968,7 +968,7 @@ def get_default_bank_cash_account(
 	account: str | None = None,
 	*,
 	fetch_balance: bool = True,
-):
+) -> dict:
 	from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
 
 	if mode_of_payment:
@@ -1023,7 +1023,7 @@ def get_against_jv(
 	start: int,
 	page_len: int,
 	filters: dict,
-):
+) -> list:
 	if not frappe.db.has_column("Journal Entry", searchfield):
 		return []
 
@@ -1054,7 +1054,7 @@ def get_against_jv(
 
 
 @frappe.whitelist()
-def get_outstanding(args: str | dict):
+def get_outstanding(args: str | dict) -> dict:
 	if not frappe.has_permission("Account"):
 		frappe.msgprint(_("No Permission"), raise_exception=1)
 
@@ -1118,7 +1118,7 @@ def get_outstanding(args: str | dict):
 
 
 @frappe.whitelist()
-def get_party_account_and_currency(company: str, party_type: str, party: str):
+def get_party_account_and_currency(company: str, party_type: str, party: str) -> dict:
 	if not frappe.has_permission("Account"):
 		frappe.msgprint(_("No Permission"), raise_exception=1)
 
@@ -1138,7 +1138,7 @@ def get_account_details_and_party_type(
 	debit: float | str | None = None,
 	credit: float | str | None = None,
 	exchange_rate: float | str | None = None,
-):
+) -> dict:
 	"""Returns dict of account details and party type to be set in Journal Entry on selection of account."""
 	if not frappe.has_permission("Account"):
 		frappe.msgprint(_("No Permission"), raise_exception=1)
@@ -1196,7 +1196,7 @@ def get_exchange_rate(
 	debit: float | str | None = None,
 	credit: float | str | None = None,
 	exchange_rate: str | float | None = None,
-):
+) -> float:
 	# Ensure exchange_rate is always numeric to avoid calculation errors
 	if isinstance(exchange_rate, str):
 		exchange_rate = flt(exchange_rate) or 1
@@ -1232,7 +1232,7 @@ def get_exchange_rate(
 
 
 @frappe.whitelist()
-def get_average_exchange_rate(account: str):
+def get_average_exchange_rate(account: str) -> float:
 	exchange_rate = 0
 	bank_balance_in_account_currency = get_balance_on(account)
 	if bank_balance_in_account_currency:
