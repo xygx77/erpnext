@@ -14,6 +14,13 @@ import erpnext
 from erpnext.accounts.doctype.invoice_discounting.invoice_discounting import (
 	get_party_account_based_on_invoice_discounting,
 )
+
+# Re-exported so existing call paths (including custom apps) referencing
+# erpnext.accounts.doctype.journal_entry.journal_entry.<fn> keep working.
+from erpnext.accounts.doctype.journal_entry.mapper import (
+	get_payment_entry_against_invoice,
+	get_payment_entry_against_order,
+)
 from erpnext.accounts.doctype.repost_accounting_ledger.repost_accounting_ledger import (
 	validate_docs_for_deferred_accounting,
 	validate_docs_for_voucher_types,
@@ -1223,12 +1230,3 @@ def get_average_exchange_rate(account: str):
 		exchange_rate = bank_balance_in_company_currency / bank_balance_in_account_currency
 
 	return exchange_rate
-
-
-# These payment-entry builders moved to mapper.py. They are re-exported here so existing
-# call paths -- including custom apps that reference
-# erpnext.accounts.doctype.journal_entry.journal_entry.<fn> -- keep working.
-from erpnext.accounts.doctype.journal_entry.mapper import (
-	get_payment_entry_against_invoice,
-	get_payment_entry_against_order,
-)
