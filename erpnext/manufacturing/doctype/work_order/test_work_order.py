@@ -3417,80 +3417,163 @@ class TestWorkOrder(ERPNextTestSuite):
 
 		self.assertRaises(frappe.ValidationError, transfer_entry.submit)
 
-	@ERPNextTestSuite.change_settings(
-		"Buying Settings",
-		{"backflush_raw_materials_of_subcontract_based_on": "Material Transferred for Subcontract"},
-	)
 	def test_send_to_subcontractor_can_consume_work_order_reserved_stock(self):
-		# Regression for #55756: a "Send to Subcontractor" Stock Entry raised against a Work Order
-		# must be allowed to consume stock that the *same* Work Order reserved. Before the fix the
-		# negative-stock guard treated the WO's own reservation as "reserved for other
-		# transactions" and blocked the entry.
-		#
-		# Backflush is set to "Material Transferred for Subcontract" so the subcontract-order
-		# validation is a no-op: the default "BOM" path dereferences a Subcontracting Order, which
-		# this standalone entry does not have. The transfer path only needs `subcontracted_item`.
+		from erpnext.buying.doctype.purchase_order.mapper import make_subcontracting_order
+		from erpnext.controllers.subcontracting_controller import make_rm_stock_entry
+		from erpnext.manufacturing.doctype.job_card.mapper import make_subcontracting_po
 		from erpnext.stock.doctype.stock_entry.stock_entry_utils import (
 			make_stock_entry as make_stock_entry_test_record,
 		)
 		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
 
-		production_item = make_item("Test S2S Reservation FG", {"is_stock_item": 1}).name
-		rm_item = make_item("Test S2S Reservation RM", {"is_stock_item": 1}).name
-		source_warehouse = "Stores - _TC"
-		supplier_warehouse = create_warehouse("Test S2S Supplier WH", company="_Test Company")
+		company = "_Test Company"
+		warehouse = "Stores - _TC"
+		supplier_warehouse = create_warehouse("Test S2S Supplier WH", company=company)
 
-		bom = make_bom(
-			item=production_item,
-			source_warehouse=source_warehouse,
-			raw_materials=[rm_item],
-			operating_cost_per_bom_quantity=100,
-			do_not_submit=True,
+		fabric = make_item("Test S2S Fabric", {"is_stock_item": 1}).name
+		stitched = make_item("Test S2S Stitched Shirt", {"is_stock_item": 1}).name
+		tshirt = make_item("Test S2S T-Shirt", {"is_stock_item": 1, "is_sub_contracted_item": 1}).name
+		service_item = make_item("Test S2S Ironing Service", {"is_stock_item": 0}).name
+
+		# Semi-FG BOM: Stitched Shirt from Fabric.
+		sfg_bom = frappe.new_doc("BOM")
+		sfg_bom.company = company
+		sfg_bom.item = stitched
+		sfg_bom.quantity = 1
+		sfg_bom.append("items", {"item_code": fabric, "qty": 1})
+		sfg_bom.insert()
+		sfg_bom.submit()
+
+		# Subcontracting BOM: how to make the final T-Shirt at the supplier (consuming Stitched Shirt).
+		tshirt_from_stitched = frappe.new_doc("BOM")
+		tshirt_from_stitched.company = company
+		tshirt_from_stitched.item = tshirt
+		tshirt_from_stitched.quantity = 1
+		tshirt_from_stitched.append("items", {"item_code": stitched, "qty": 1})
+		tshirt_from_stitched.insert()
+		tshirt_from_stitched.submit()
+
+		if not frappe.db.exists("Subcontracting BOM", {"finished_good": tshirt}):
+			frappe.get_doc(
+				{
+					"doctype": "Subcontracting BOM",
+					"finished_good": tshirt,
+					"finished_good_qty": 1,
+					"service_item": service_item,
+					"service_item_qty": 1,
+					"finished_good_bom": tshirt_from_stitched.name,
+					"is_active": 1,
+				}
+			).insert()
+
+		if not frappe.db.exists("Workstation", "Test S2S Workstation"):
+			make_workstation(workstation="Test S2S Workstation", production_capacity=1)
+		for op in ("Test S2S Stitching", "Test S2S Ironing"):
+			if not frappe.db.exists("Operation", op):
+				make_operation(operation=op, workstation="Test S2S Workstation")
+
+		# Final BOM for T-Shirt: internal Stitching op (produces Stitched Shirt) + subcontracted Ironing.
+		fg_bom = frappe.new_doc("BOM")
+		fg_bom.company = company
+		fg_bom.item = tshirt
+		fg_bom.quantity = 1
+		fg_bom.with_operations = 1
+		fg_bom.track_semi_finished_goods = 1
+		fg_bom.append("items", {"item_code": fabric, "qty": 1})
+		fg_bom.append(
+			"operations",
+			{
+				"operation": "Test S2S Stitching",
+				"workstation": "Test S2S Workstation",
+				"finished_good": stitched,
+				"finished_good_qty": 1,
+				"bom_no": sfg_bom.name,
+				"time_in_mins": 60,
+				"sequence_id": 1,
+			},
 		)
-		for row in bom.exploded_items:
-			make_stock_entry_test_record(
-				item_code=row.item_code, target=source_warehouse, qty=10, basic_rate=100
-			)
-		bom.save()
-		bom.submit()
+		fg_bom.append(
+			"operations",
+			{
+				"operation": "Test S2S Ironing",
+				"workstation": "Test S2S Workstation",
+				"finished_good": tshirt,
+				"finished_good_qty": 1,
+				"is_final_finished_good": 1,
+				"is_subcontracted": 1,
+				"bom_no": tshirt_from_stitched.name,
+				"time_in_mins": 60,
+				"sequence_id": 2,
+			},
+		)
+		fg_bom.append("items", {"item_code": stitched, "qty": 1, "operation_row_id": 2})
+		fg_bom.insert()
+		fg_bom.submit()
+
+		make_stock_entry_test_record(item_code=fabric, target=warehouse, qty=10, basic_rate=100)
 
 		wo = make_wo_order_test_record(
-			item=production_item,
+			production_item=tshirt,
 			qty=10,
+			bom_no=fg_bom.name,
 			reserve_stock=1,
-			source_warehouse=source_warehouse,
+			skip_transfer=1,
+			source_warehouse=warehouse,
+			wip_warehouse=warehouse,
+			fg_warehouse=warehouse,
+			do_not_save=True,
 		)
+		wo.operations[0].time_in_mins = 60
+		wo.operations[1].time_in_mins = 60
+		wo.save()
+		wo.submit()
+
+		# Complete the internal Stitching job card -> Stitched Shirt is produced into WIP and reserved.
+		stitching_jc = frappe.get_doc(
+			"Job Card",
+			frappe.db.get_value("Job Card", {"work_order": wo.name, "operation": "Test S2S Stitching"}),
+		)
+		stitching_jc.append(
+			"time_logs",
+			{
+				"from_time": "2024-01-01 08:00:00",
+				"to_time": "2024-01-01 09:00:00",
+				"completed_qty": stitching_jc.for_quantity,
+			},
+		)
+		stitching_jc.submit()
+
+		manufacturing_entry = frappe.get_doc(stitching_jc.make_stock_entry_for_semi_fg_item())
+		manufacturing_entry.submit()
 
 		sre_name = frappe.db.get_value(
 			"Stock Reservation Entry",
-			{"voucher_no": wo.name, "item_code": rm_item, "warehouse": source_warehouse},
+			{"voucher_no": wo.name, "item_code": stitched, "warehouse": warehouse, "docstatus": 1},
 		)
-		self.assertTrue(sre_name, "Work Order should have reserved the raw material")
-		self.assertEqual(frappe.db.get_value("Stock Reservation Entry", sre_name, "reserved_qty"), 10)
+		self.assertTrue(sre_name, "Work Order should have reserved the semi-finished good")
 
-		# Send the reserved raw material to the subcontractor against the same Work Order.
-		ste = frappe.new_doc("Stock Entry")
-		ste.purpose = "Send to Subcontractor"
-		ste.stock_entry_type = "Send to Subcontractor"
-		ste.company = "_Test Company"
-		ste.work_order = wo.name
-		ste.append(
-			"items",
-			{
-				"item_code": rm_item,
-				"qty": 10,
-				"uom": "Nos",
-				"stock_uom": "Nos",
-				"conversion_factor": 1,
-				"s_warehouse": source_warehouse,
-				"t_warehouse": supplier_warehouse,
-				"basic_rate": 100,
-				"subcontracted_item": production_item,
-			},
-		)
+		# Subcontract the Ironing operation: Job Card -> Subcontracting PO -> Subcontracting Order.
+		ironing_jc = frappe.db.get_value("Job Card", {"work_order": wo.name, "operation": "Test S2S Ironing"})
+		po = frappe.get_doc(make_subcontracting_po(ironing_jc))
+		po.supplier = "_Test Supplier"
+		po.supplier_warehouse = supplier_warehouse
+		po.schedule_date = nowdate()
+		for item in po.items:
+			item.schedule_date = nowdate()
+		po.insert()
+		po.submit()
+
+		sco = make_subcontracting_order(po.name)
+		sco.supplier_warehouse = supplier_warehouse
+		for item in sco.supplied_items:
+			item.reserve_warehouse = warehouse
+		sco.insert()
+		sco.submit()
+
+		# Transfer the reserved Stitched Shirt to the subcontractor. This must NOT raise
+		# NegativeStockError ("reserved for other transactions").
+		ste = frappe.new_doc("Stock Entry").update(make_rm_stock_entry(sco.name))
 		ste.insert()
-
-		# Must submit without raising NegativeStockError ("reserved for other transactions").
 		ste.submit()
 
 		# The reservation is freed: transferred_qty == sent qty and the SRE is Closed.
@@ -3498,7 +3581,7 @@ class TestWorkOrder(ERPNextTestSuite):
 		self.assertEqual(sre.transferred_qty, 10)
 		self.assertEqual(sre.status, "Closed")
 
-		# Cancelling the entry restores the reservation.
+		# Cancelling the transfer restores the reservation.
 		ste.cancel()
 		sre.reload()
 		self.assertEqual(sre.transferred_qty, 0)

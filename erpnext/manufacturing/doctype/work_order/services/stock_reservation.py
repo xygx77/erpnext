@@ -446,9 +446,7 @@ class StockReservationService:
 		Note: only qty-based reservations are handled here; serial/batch reservations are left to
 		the existing material-transfer machinery.
 		"""
-		remaining = self._subcontract_transferred_qty_by_item()
-		if not remaining:
-			return
+		sent = self._subcontract_transferred_qty_by_item()
 
 		entries = frappe.get_all(
 			"Stock Reservation Entry",
@@ -462,34 +460,66 @@ class StockReservationService:
 				continue
 
 			key = (entry.item_code, entry.warehouse)
-			if key not in remaining:
+			sre = frappe.get_doc("Stock Reservation Entry", entry.name)
+
+			# Cap at what is still reservable (qty not already delivered/consumed). Always set the
+			# value -- including back to 0 when nothing (or less) is now sent -- so cancelling a
+			# transfer restores the reservation.
+			available = flt(sre.reserved_qty) - flt(sre.consumed_qty) - flt(sre.delivered_qty)
+			qty_to_set = max(min(flt(sent.get(key, 0.0)), available), 0.0)
+			if key in sent:
+				sent[key] = flt(sent[key]) - qty_to_set
+
+			if flt(sre.transferred_qty) == qty_to_set:
 				continue
 
-			sre = frappe.get_doc("Stock Reservation Entry", entry.name)
-			qty_to_update = max(min(flt(remaining[key]), flt(sre.reserved_qty) - flt(sre.consumed_qty)), 0.0)
-			remaining[key] = flt(remaining[key]) - qty_to_update
-
-			sre.db_set("transferred_qty", qty_to_update, update_modified=False)
+			sre.db_set("transferred_qty", qty_to_set, update_modified=False)
 			sre.update_status()
 			sre.update_reserved_stock_in_bin()
 
 	def _subcontract_transferred_qty_by_item(self):
-		# Include cancelled (docstatus 2) entries so an item that was sent and then cancelled stays
-		# in the map (with a recomputed qty of 0), letting release_reserved_qty_for_subcontract_transfer
-		# reset its reservation. Only submitted (docstatus 1) rows contribute to the qty.
+		"""Qty sent to subcontractors for this Work Order, keyed by (item_code, source warehouse).
+
+		The transfer Stock Entries are linked to the Work Order through its subcontracted Job Cards
+		(Job Card -> Subcontracting Order / Purchase Order -> Send to Subcontractor entry), since the
+		entry itself does not retain ``work_order``. Only submitted (docstatus 1) entries contribute,
+		so a cancelled transfer drops out and the reservation is restored on the next recompute.
+		"""
+		job_cards = frappe.get_all(
+			"Job Card", filters={"work_order": self.doc.name, "is_subcontracted": 1}, pluck="name"
+		)
+		if not job_cards:
+			return {}
+
+		sco_names = frappe.get_all(
+			"Subcontracting Order Item", filters={"job_card": ["in", job_cards]}, pluck="parent"
+		)
+		po_names = frappe.get_all(
+			"Purchase Order Item", filters={"job_card": ["in", job_cards]}, pluck="parent"
+		)
+		if not sco_names and not po_names:
+			return {}
+
 		ste = frappe.qb.DocType("Stock Entry")
 		ste_child = frappe.qb.DocType("Stock Entry Detail")
-		submitted_qty = Case().when(ste.docstatus == 1, ste_child.transfer_qty).else_(0)
+
+		link = None
+		if sco_names:
+			link = ste.subcontracting_order.isin(list(set(sco_names)))
+		if po_names:
+			po_link = ste.purchase_order.isin(list(set(po_names)))
+			link = po_link if link is None else (link | po_link)
+
 		rows = (
 			frappe.qb.from_(ste)
 			.inner_join(ste_child)
 			.on(ste_child.parent == ste.name)
-			.select(ste_child.item_code, ste_child.s_warehouse, fn.Sum(submitted_qty).as_("qty"))
+			.select(ste_child.item_code, ste_child.s_warehouse, fn.Sum(ste_child.transfer_qty).as_("qty"))
 			.where(
-				(ste.docstatus.isin([1, 2]))
-				& (ste.work_order == self.doc.name)
+				(ste.docstatus == 1)
 				& (ste.purpose == "Send to Subcontractor")
 				& (ste_child.s_warehouse.isnotnull())
+				& link
 			)
 			.groupby(ste_child.item_code, ste_child.s_warehouse)
 		).run(as_dict=1)
