@@ -24,7 +24,8 @@ def get_payment_entry_against_order(
 	debit_in_account_currency: str | float | None = None,
 	journal_entry: bool = False,
 	bank_account: str | None = None,
-):
+) -> dict | Document:
+	"""Build an advance-payment Journal Entry against an unbilled Sales/Purchase Order."""
 	ref_doc = frappe.get_doc(dt, dn)
 
 	if flt(ref_doc.per_billed, 2) > 0:
@@ -74,7 +75,8 @@ def get_payment_entry_against_invoice(
 	debit_in_account_currency: str | None = None,
 	journal_entry: bool = False,
 	bank_account: str | None = None,
-):
+) -> dict | Document:
+	"""Build a payment Journal Entry against a Sales/Purchase Invoice's outstanding amount."""
 	ref_doc = frappe.get_doc(dt, dn)
 	if dt == "Sales Invoice":
 		party_type = "Customer"
@@ -110,32 +112,54 @@ def get_payment_entry_against_invoice(
 	)
 
 
-def get_payment_entry(ref_doc, args):
-	from erpnext.accounts.doctype.journal_entry.journal_entry import (
-		get_default_bank_cash_account,
-		get_exchange_rate,
-	)
+def get_payment_entry(ref_doc, args: dict) -> dict | Document:
+	"""Build a Bank Entry Journal Entry paying `ref_doc`, with a party row and a bank row.
+
+	Returns the Journal Entry document when `args["journal_entry"]` is truthy, otherwise its
+	dict (for client calls).
+	"""
+	je = frappe.new_doc("Journal Entry")
+	je.update({"voucher_type": "Bank Entry", "company": ref_doc.company, "remark": args.get("remarks")})
 
 	cost_center = ref_doc.get("cost_center") or frappe.get_cached_value(
 		"Company", ref_doc.company, "cost_center"
 	)
-	exchange_rate = 1
-	if args.get("party_account"):
-		# Modified to include the posting date for which the exchange rate is required.
-		# Assumed to be the posting date in the reference document
-		exchange_rate = get_exchange_rate(
-			ref_doc.get("posting_date") or ref_doc.get("transaction_date"),
-			args.get("party_account"),
-			args.get("party_account_currency"),
-			ref_doc.company,
-			ref_doc.doctype,
-			ref_doc.name,
-		)
+	exchange_rate = _reference_exchange_rate(ref_doc, args)
 
-	je = frappe.new_doc("Journal Entry")
-	je.update({"voucher_type": "Bank Entry", "company": ref_doc.company, "remark": args.get("remarks")})
+	party_row = _append_party_row(je, ref_doc, args, cost_center, exchange_rate)
+	bank_row = _append_bank_row(je, ref_doc, args, cost_center, exchange_rate)
 
-	party_row = je.append(
+	if party_row.account_currency != ref_doc.company_currency or (
+		bank_row.account_currency and bank_row.account_currency != ref_doc.company_currency
+	):
+		je.multi_currency = 1
+
+	je.set_amounts_in_company_currency()
+	je.set_total_debit_credit()
+
+	return je if args.get("journal_entry") else je.as_dict()
+
+
+def _reference_exchange_rate(ref_doc, args: dict) -> float:
+	"""Exchange rate of the party account on the reference document's posting date."""
+	if not args.get("party_account"):
+		return 1
+
+	from erpnext.accounts.doctype.journal_entry.journal_entry import get_exchange_rate
+
+	return get_exchange_rate(
+		ref_doc.get("posting_date") or ref_doc.get("transaction_date"),
+		args.get("party_account"),
+		args.get("party_account_currency"),
+		ref_doc.company,
+		ref_doc.doctype,
+		ref_doc.name,
+	)
+
+
+def _append_party_row(je, ref_doc, args: dict, cost_center, exchange_rate: float):
+	"""Append the party (debtor/creditor) row that records the advance/payment."""
+	return je.append(
 		"accounts",
 		{
 			"account": args.get("party_account"),
@@ -153,14 +177,19 @@ def get_payment_entry(ref_doc, args):
 		},
 	)
 
-	bank_row = je.append("accounts")
 
-	# Make it bank_details
+def _append_bank_row(je, ref_doc, args: dict, cost_center, exchange_rate: float):
+	"""Append the bank/cash row, defaulting the account and converting the amount to it."""
+	from erpnext.accounts.doctype.journal_entry.journal_entry import (
+		get_default_bank_cash_account,
+		get_exchange_rate,
+	)
+
+	bank_row = je.append("accounts")
 	bank_account = get_default_bank_cash_account(ref_doc.company, "Bank", account=args.get("bank_account"))
 	if bank_account:
 		bank_row.update(bank_account)
-		# Modified to include the posting date for which the exchange rate is required.
-		# Assumed to be the posting date of the reference date
+		# posting date assumed to be the reference document's posting/transaction date
 		bank_row.exchange_rate = get_exchange_rate(
 			ref_doc.get("posting_date") or ref_doc.get("transaction_date"),
 			bank_account["account"],
@@ -171,26 +200,17 @@ def get_payment_entry(ref_doc, args):
 	bank_row.cost_center = cost_center
 
 	amount = args.get("debit_in_account_currency") or args.get("amount")
-
 	if bank_row.account_currency == args.get("party_account_currency"):
 		bank_row.set(args.get("amount_field_bank"), amount)
 	else:
 		bank_row.set(args.get("amount_field_bank"), amount * exchange_rate)
 
-	# Multi currency check again
-	if party_row.account_currency != ref_doc.company_currency or (
-		bank_row.account_currency and bank_row.account_currency != ref_doc.company_currency
-	):
-		je.multi_currency = 1
-
-	je.set_amounts_in_company_currency()
-	je.set_total_debit_credit()
-
-	return je if args.get("journal_entry") else je.as_dict()
+	return bank_row
 
 
 @frappe.whitelist()
-def make_inter_company_journal_entry(name: str, voucher_type: str, company: str):
+def make_inter_company_journal_entry(name: str, voucher_type: str, company: str) -> dict:
+	"""Build the counterpart Journal Entry in another company, linked back to `name`."""
 	journal_entry = frappe.new_doc("Journal Entry")
 	journal_entry.voucher_type = voucher_type
 	journal_entry.company = company
@@ -200,7 +220,8 @@ def make_inter_company_journal_entry(name: str, voucher_type: str, company: str)
 
 
 @frappe.whitelist()
-def make_reverse_journal_entry(source_name: str, target_doc: str | Document | None = None):
+def make_reverse_journal_entry(source_name: str, target_doc: str | Document | None = None) -> Document:
+	"""Map a submitted Journal Entry to a reversing one (debits and credits swapped)."""
 	existing_reverse = frappe.db.exists("Journal Entry", {"reversal_of": source_name, "docstatus": 1})
 	if existing_reverse:
 		frappe.throw(
@@ -211,7 +232,7 @@ def make_reverse_journal_entry(source_name: str, target_doc: str | Document | No
 
 	from frappe.model.mapper import get_mapped_doc
 
-	def post_process(source, target):
+	def post_process(source, target) -> None:
 		target.reversal_of = source.name
 
 	doclist = get_mapped_doc(
