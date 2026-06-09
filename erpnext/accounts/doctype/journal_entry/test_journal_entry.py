@@ -204,7 +204,7 @@ class TestJournalEntry(ERPNextTestSuite):
 		self.assertFalse(gle)
 
 	def test_reverse_journal_entry(self):
-		from erpnext.accounts.doctype.journal_entry.journal_entry import make_reverse_journal_entry
+		from erpnext.accounts.doctype.journal_entry.mapper import make_reverse_journal_entry
 
 		jv = make_journal_entry("_Test Bank USD - _TC", "Sales - _TC", 100, exchange_rate=50, save=False)
 

@@ -1225,12 +1225,10 @@ def get_average_exchange_rate(account: str):
 	return exchange_rate
 
 
-# These document builders moved to mapper.py. They are re-exported here so existing
+# These payment-entry builders moved to mapper.py. They are re-exported here so existing
 # call paths -- including custom apps that reference
 # erpnext.accounts.doctype.journal_entry.journal_entry.<fn> -- keep working.
 from erpnext.accounts.doctype.journal_entry.mapper import (
 	get_payment_entry_against_invoice,
 	get_payment_entry_against_order,
-	make_inter_company_journal_entry,
-	make_reverse_journal_entry,
 )
