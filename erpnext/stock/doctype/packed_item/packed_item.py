@@ -175,31 +175,6 @@ def reset_packing_list(doc):
 	return reset_table
 
 
-def get_product_bundle_items(item_code):
-	product_bundle = frappe.qb.DocType("Product Bundle")
-	product_bundle_item = frappe.qb.DocType("Product Bundle Item")
-
-	query = (
-		frappe.qb.from_(product_bundle_item)
-		.join(product_bundle)
-		.on(product_bundle_item.parent == product_bundle.name)
-		.select(
-			product_bundle_item.item_code,
-			product_bundle_item.qty,
-			product_bundle_item.uom,
-			product_bundle_item.description,
-		)
-		.where(
-			(product_bundle.new_item_code == item_code)
-			& (product_bundle.is_active == 1)
-			& (product_bundle.docstatus == 1)
-			& (product_bundle.disabled == 0)
-		)
-		.orderby(product_bundle_item.idx)
-	)
-	return query.run(as_dict=True)
-
-
 def get_product_bundle_items_by_name(bundle_name):
 	"Component rows of a specific Product Bundle version."
 	product_bundle_item = frappe.qb.DocType("Product Bundle Item")
@@ -464,10 +439,12 @@ def get_items_from_product_bundle(row: str):
 	dialog passes this); ``row.item_code`` is the legacy contract, resolving the
 	parent item's active version.
 	"""
+	from erpnext.selling.doctype.product_bundle.product_bundle import get_active_product_bundle
+
 	row, items = ItemDetailsCtx(json.loads(row)), []
-	frappe.has_permission("Product Bundle", "read", row.get("product_bundle"), throw=True)
 
 	if bundle_name := row.get("product_bundle"):
+		frappe.has_permission("Product Bundle", "read", bundle_name, throw=True)
 		bundle = frappe.db.get_value("Product Bundle", bundle_name, ["docstatus", "disabled"], as_dict=True)
 		if not bundle or bundle.docstatus != 1:
 			frappe.throw(_("Product Bundle {0} is not submitted").format(frappe.bold(bundle_name)))
@@ -477,9 +454,10 @@ def get_items_from_product_bundle(row: str):
 					frappe.bold(bundle_name)
 				)
 			)
-		bundled_items = get_product_bundle_items_by_name(bundle_name)
-	else:
-		bundled_items = get_product_bundle_items(row["item_code"])
+	elif bundle_name := get_active_product_bundle(row["item_code"]):
+		frappe.has_permission("Product Bundle", "read", bundle_name, throw=True)
+
+	bundled_items = get_product_bundle_items_by_name(bundle_name) if bundle_name else []
 	for item in bundled_items:
 		row.update(
 			{
