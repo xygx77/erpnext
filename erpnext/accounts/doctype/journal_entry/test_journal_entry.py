@@ -169,8 +169,11 @@ class TestJournalEntry(ERPNextTestSuite):
 			"debit_in_account_currency",
 			"credit",
 			"credit_in_account_currency",
+			"debit_in_transaction_currency",
+			"credit_in_transaction_currency",
 		]
 
+		# Transaction currency is USD (first foreign row); the INR row is converted at 1/50.
 		self.expected_gle = [
 			{
 				"account": "_Test Bank - _TC",
@@ -179,6 +182,8 @@ class TestJournalEntry(ERPNextTestSuite):
 				"debit_in_account_currency": 0,
 				"credit": 5000,
 				"credit_in_account_currency": 5000,
+				"debit_in_transaction_currency": 0,
+				"credit_in_transaction_currency": 100,
 			},
 			{
 				"account": "_Test Bank USD - _TC",
@@ -187,6 +192,8 @@ class TestJournalEntry(ERPNextTestSuite):
 				"debit_in_account_currency": 100,
 				"credit": 0,
 				"credit_in_account_currency": 0,
+				"debit_in_transaction_currency": 100,
+				"credit_in_transaction_currency": 0,
 			},
 		]
 
@@ -202,6 +209,52 @@ class TestJournalEntry(ERPNextTestSuite):
 		)
 
 		self.assertFalse(gle)
+
+	def test_multi_currency_transaction_currency_on_foreign_debit(self):
+		"""Pin debit_in_transaction_currency for a foreign-currency debit row.
+
+		Transaction currency is USD (the first foreign row); the INR debit row must be
+		converted at 1/exchange_rate, so 5000 INR -> 100 USD. Guards the / vs * direction.
+		"""
+		jv = frappe.new_doc("Journal Entry")
+		jv.company = "_Test Company"
+		jv.posting_date = nowdate()
+		jv.multi_currency = 1
+		jv.append(
+			"accounts",
+			{
+				"account": "_Test Bank USD - _TC",
+				"cost_center": "_Test Cost Center - _TC",
+				"credit_in_account_currency": 100,
+				"exchange_rate": 50,
+			},
+		)
+		jv.append(
+			"accounts",
+			{
+				"account": "_Test Bank - _TC",
+				"cost_center": "_Test Cost Center - _TC",
+				"debit_in_account_currency": 5000,
+				"exchange_rate": 1,
+			},
+		)
+		jv.submit()
+
+		self.voucher_no = jv.name
+		self.fields = ["account", "debit_in_transaction_currency", "credit_in_transaction_currency"]
+		self.expected_gle = [
+			{
+				"account": "_Test Bank - _TC",
+				"debit_in_transaction_currency": 100,
+				"credit_in_transaction_currency": 0,
+			},
+			{
+				"account": "_Test Bank USD - _TC",
+				"debit_in_transaction_currency": 0,
+				"credit_in_transaction_currency": 100,
+			},
+		]
+		self.check_gl_entries()
 
 	def test_reverse_journal_entry(self):
 		from erpnext.accounts.doctype.journal_entry.mapper import make_reverse_journal_entry
