@@ -467,9 +467,7 @@ def get_items_from_product_bundle(row: str):
 	row, items = ItemDetailsCtx(json.loads(row)), []
 
 	if bundle_name := row.get("product_bundle"):
-		bundle = frappe.db.get_value(
-			"Product Bundle", bundle_name, ["docstatus", "disabled"], as_dict=True
-		)
+		bundle = frappe.db.get_value("Product Bundle", bundle_name, ["docstatus", "disabled"], as_dict=True)
 		if not bundle or bundle.docstatus != 1:
 			frappe.throw(_("Product Bundle {0} is not submitted").format(frappe.bold(bundle_name)))
 		if bundle.disabled:
