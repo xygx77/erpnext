@@ -201,7 +201,7 @@ erpnext.TransactionController = class TransactionController extends erpnext.taxe
 		}
 
 		if (this.frm.fields_dict["items"].grid.get_field("product_bundle")) {
-			// restrict the version picker to submitted Product Bundles of the row's item
+			// restrict the version picker to enabled, submitted Product Bundles of the row's item
 			this.frm.set_query("product_bundle", "items", function (doc, cdt, cdn) {
 				let row = locals[cdt][cdn];
 
@@ -209,6 +209,7 @@ erpnext.TransactionController = class TransactionController extends erpnext.taxe
 					filters: {
 						new_item_code: row.item_code,
 						docstatus: 1,
+						disabled: 0,
 					},
 				};
 			});

@@ -62,8 +62,10 @@ class ProductBundle(Document):
 		self.db_set("is_active", 0)
 
 	def on_update_after_submit(self):
-		# `is_active` is the only field editable after submit; keep a single active
-		# version per parent item in sync when the user (re)activates a version.
+		# `is_active` and `disabled` are the only fields editable after submit; keep a
+		# single active version per parent item in sync when the user (re)activates a
+		# version. `disabled` is orthogonal: it parks a version without ceding the
+		# active slot, so re-enabling restores it without re-activation.
 		if self.is_active:
 			self.make_active()
 
@@ -171,17 +173,19 @@ def get_next_version_index(existing_names: list[str]) -> int:
 
 
 def get_active_product_bundle(item_code: str) -> str | None:
-	"""Return the name of the active, submitted Product Bundle for ``item_code``, else None.
+	"""Return the name of the active, enabled, submitted Product Bundle for
+	``item_code``, else None.
 
 	This is the single resolution entry point for every consumer of bundles; it
 	replaces the legacy ``exists("Product Bundle", {name/new_item_code, disabled: 0})``
-	lookups that assumed one mutable bundle per item.
+	lookups that assumed one mutable bundle per item. A disabled bundle resolves to
+	None even if it still holds the active slot for its parent item.
 	"""
 	if not item_code:
 		return None
 	return frappe.db.get_value(
 		"Product Bundle",
-		{"new_item_code": item_code, "is_active": 1, "docstatus": 1},
+		{"new_item_code": item_code, "is_active": 1, "docstatus": 1, "disabled": 0},
 		"name",
 	)
 

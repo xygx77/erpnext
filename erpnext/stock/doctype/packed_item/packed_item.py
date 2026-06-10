@@ -8,6 +8,7 @@ import json
 
 import frappe
 import frappe.defaults
+from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
 
@@ -192,6 +193,7 @@ def get_product_bundle_items(item_code):
 			(product_bundle.new_item_code == item_code)
 			& (product_bundle.is_active == 1)
 			& (product_bundle.docstatus == 1)
+			& (product_bundle.disabled == 0)
 		)
 		.orderby(product_bundle_item.idx)
 	)
@@ -219,14 +221,25 @@ def get_bundle_version_for_row(item_row):
 
 	Honours a version explicitly chosen on the row (validated to be a submitted
 	bundle of that item); otherwise falls back to the item's active version. A stale
-	choice (e.g. left over after changing the item) self-heals back to the active one.
+	choice (e.g. left over after changing the item) self-heals back to the active
+	one, but a disabled choice blocks the transaction instead of silently switching
+	versions behind the user's back.
 	"""
 	from erpnext.selling.doctype.product_bundle.product_bundle import get_active_product_bundle
 
 	chosen = item_row.get("product_bundle") if item_row.meta.has_field("product_bundle") else None
 	if chosen:
-		bundle = frappe.db.get_value("Product Bundle", chosen, ["new_item_code", "docstatus"], as_dict=True)
+		bundle = frappe.db.get_value(
+			"Product Bundle", chosen, ["new_item_code", "docstatus", "disabled"], as_dict=True
+		)
 		if bundle and bundle.new_item_code == item_row.item_code and bundle.docstatus == 1:
+			if bundle.disabled:
+				frappe.throw(
+					_("Row #{0}: Product Bundle {1} is disabled and cannot be used in transactions.").format(
+						item_row.idx, frappe.bold(chosen)
+					),
+					title=_("Disabled Product Bundle"),
+				)
 			return chosen
 
 	return get_active_product_bundle(item_row.item_code)
