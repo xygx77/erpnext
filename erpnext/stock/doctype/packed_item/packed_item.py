@@ -454,7 +454,7 @@ def get_items_from_product_bundle(row: str):
 					frappe.bold(bundle_name)
 				)
 			)
-	elif bundle_name := get_active_product_bundle(row["item_code"]):
+	elif bundle_name := get_active_product_bundle(row.get("item_code")):
 		frappe.has_permission("Product Bundle", "read", bundle_name, throw=True)
 
 	bundled_items = get_product_bundle_items_by_name(bundle_name) if bundle_name else []
