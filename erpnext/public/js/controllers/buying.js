@@ -628,7 +628,7 @@ erpnext.buying.get_items_from_product_bundle = function (frm) {
 				method: "erpnext.stock.doctype.packed_item.packed_item.get_items_from_product_bundle",
 				args: {
 					row: {
-						item_code: args.product_bundle,
+						product_bundle: args.product_bundle,
 						quantity: args.quantity,
 						parenttype: frm.doc.doctype,
 						parent: frm.doc.name,

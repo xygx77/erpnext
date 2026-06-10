@@ -188,6 +188,57 @@ class TestPackedItem(ERPNextTestSuite):
 		self.assertFalse(so.items[0].product_bundle)
 		self.assertFalse(so.get("packed_items"))
 
+	def test_get_items_from_product_bundle_endpoint(self):
+		"The buying dialog passes the chosen version by document name (legacy: parent item code)."
+		import json
+
+		from erpnext.selling.doctype.product_bundle.product_bundle import get_active_product_bundle
+		from erpnext.stock.doctype.packed_item.packed_item import get_items_from_product_bundle
+
+		ctx = {
+			"quantity": 2,
+			"doctype": "Purchase Order",
+			"parenttype": "Purchase Order",
+			"company": "_Test Company",
+			"currency": "INR",
+			"conversion_rate": 1,
+			"transaction_date": nowdate(),
+		}
+
+		# by document name, as the buying dialog sends it (bundle names are PB-prefixed
+		# since versioning, so they no longer double as the parent item code)
+		version = get_active_product_bundle(self.bundle)
+		items = get_items_from_product_bundle(json.dumps({"product_bundle": version, **ctx}))
+		self.assertEqual(sorted(i.item_code for i in items), sorted(self.bundle_items))
+		self.assertEqual([i.qty for i in items], [4, 4])
+
+		# legacy contract: the parent item code resolves to its active version
+		items = get_items_from_product_bundle(json.dumps({"item_code": self.bundle, **ctx}))
+		self.assertEqual(sorted(i.item_code for i in items), sorted(self.bundle_items))
+
+		# an unsubmitted version is rejected
+		draft = frappe.get_doc(
+			{
+				"doctype": "Product Bundle",
+				"new_item_code": make_item(properties={"is_stock_item": 0}).name,
+				"items": [{"item_code": self.bundle_items[0], "qty": 1}],
+			}
+		).insert()
+		self.assertRaises(
+			frappe.ValidationError,
+			get_items_from_product_bundle,
+			json.dumps({"product_bundle": draft.name, **ctx}),
+		)
+
+		# a disabled version is rejected
+		frappe.db.set_value("Product Bundle", version, "disabled", 1)
+		self.addCleanup(frappe.db.set_value, "Product Bundle", version, "disabled", 0)
+		self.assertRaises(
+			frappe.ValidationError,
+			get_items_from_product_bundle,
+			json.dumps({"product_bundle": version, **ctx}),
+		)
+
 	@ERPNextTestSuite.change_settings("Selling Settings", {"allow_multiple_items": 1})
 	def test_recurring_bundle_item(self):
 		"Test impact on packed items if same bundle item is added and removed."
