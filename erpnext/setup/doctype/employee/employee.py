@@ -301,6 +301,9 @@ class Employee(NestedSet):
 		if not self.user_id:
 			return
 
+		if not self.has_value_changed("status") and not self.has_value_changed("user_id"):
+			return
+
 		user = frappe.get_doc("User", self.user_id)
 		enabled = user.enabled
 		if self.status != "Active" and enabled or self.status == "Active" and enabled == 0:
