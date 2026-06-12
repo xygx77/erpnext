@@ -373,9 +373,9 @@ class BOM(WebsiteGenerator):
 					).format(item.idx, get_link_to_form("Item", item.item_code))
 				)
 
-			if not item.qty:
+			if item.qty is None:
 				frappe.throw(
-					_("Row #{0}: Quantity should be greater than 0 for {1} Item {2}").format(
+					_("Row #{0}: Quantity is required for {1} Item {2}").format(
 						item.idx, item.secondary_item_type, get_link_to_form("Item", item.item_code)
 					)
 				)
