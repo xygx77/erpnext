@@ -3,10 +3,13 @@
 
 frappe.ui.form.on("FTA Audit File", {
 	refresh: function (frm) {
-		// Add Generate FAF button for Draft status
-		if (frm.doc.status === "Draft" && !frm.is_new()) {
+		// Generate FAF — available from Draft (first generation) and Error
+		// (retry after a previous attempt failed). Queued/Generating are
+		// blocked by the server guard; Generated/Submitted are intentionally
+		// not re-generable.
+		if (!frm.is_new() && ["Draft", "Error"].includes(frm.doc.status)) {
 			frm.add_custom_button(
-				__("Generate FAF"),
+				__(frm.doc.status === "Error" ? "Retry FAF Generation" : "Generate FAF"),
 				function () {
 					frm.trigger("generate_faf");
 				},

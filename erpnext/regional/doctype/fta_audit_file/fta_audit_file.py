@@ -17,8 +17,10 @@ delimited by an explicit start/end marker row:
   4. General Ledger           (GLDataStart   .. GLDataEnd)
 
 The footer of each transactional table carries running totals plus a
-transaction count. All amounts are in AED (foreign-currency mirrors are
-emitted alongside when the source invoice is non-AED).
+transaction count. Primary amount columns are in the company's accounting
+currency (typically AED for a UAE-registered entity); foreign-currency
+mirrors are emitted alongside when the source invoice is in a different
+currency.
 """
 
 import csv
@@ -169,7 +171,14 @@ class FTAAuditFile(Document):
 				err_doc.generation_log = (err_doc.generation_log or "") + f"\n\nError: {e}"
 				err_doc.save()
 			except Exception:
-				pass
+				# Don't lose the original failure if persisting the Error
+				# state itself fails (e.g. row lock, validation regression);
+				# log the secondary failure with context, then re-raise the
+				# original ``e`` below so the job is still marked failed.
+				frappe.log_error(
+					title=_("FAF Error-state persistence failed"),
+					message=f"{self.doctype} {self.name}\n\n{frappe.get_traceback()}",
+				)
 			frappe.log_error(
 				title=_("FAF Generation Error"),
 				message=frappe.get_traceback(),
@@ -307,8 +316,8 @@ class FTAAuditFile(Document):
 
 		company_currency = _company_currency(self.company)
 
-		total_purchase_aed = 0.0
-		total_vat_aed = 0.0
+		total_purchase_company = 0.0
+		total_vat_company = 0.0
 		line_count = 0
 
 		for inv in invoices:
@@ -316,10 +325,15 @@ class FTAAuditFile(Document):
 			fcy_code, fcy_factor = _fcy_for_invoice(inv.currency, inv.conversion_rate, company_currency)
 
 			for item in items_by_invoice.get(inv.name, []):
-				net_aed = flt(item.base_net_amount, 2)
-				vat_aed = flt(item.tax_amount or 0, 2)
-				net_fcy = flt((item.net_amount or 0) if fcy_code != "XXX" else 0, 2)
-				vat_fcy = flt(vat_aed / fcy_factor if fcy_factor else 0, 2) if fcy_code != "XXX" else 0.0
+				# base_net_amount is company-currency; tax_amount is a UAE
+				# custom field with options="currency" and therefore stored
+				# in the document's invoice currency. Multiply by the
+				# conversion rate to land in company currency.
+				net_company = flt(item.base_net_amount, 2)
+				vat_invoice = flt(item.tax_amount or 0, 2)
+				vat_company = flt(vat_invoice * fcy_factor, 2)
+				net_fcy = flt(item.net_amount or 0, 2) if fcy_code != "XXX" else 0.0
+				vat_fcy = vat_invoice if fcy_code != "XXX" else 0.0
 
 				writer.writerow(
 					[
@@ -330,23 +344,23 @@ class FTAAuditFile(Document):
 						inv.permit_no or "",
 						item.idx,
 						_clean(item.description or item.item_name or ""),
-						_money(net_aed),
-						_money(vat_aed),
+						_money(net_company),
+						_money(vat_company),
 						_resolve_tax_code(item.item_tax_template, inv.posting_date, tax_code_bands),
 						fcy_code,
 						_money(net_fcy),
 						_money(vat_fcy),
 					]
 				)
-				total_purchase_aed += net_aed
-				total_vat_aed += vat_aed
+				total_purchase_company += net_company
+				total_vat_company += vat_company
 				line_count += 1
 
 		writer.writerow(
 			[
 				"PurcDataEnd",
-				_money(total_purchase_aed),
-				_money(total_vat_aed),
+				_money(total_purchase_company),
+				_money(total_vat_company),
 				line_count,
 			]
 		)
@@ -409,8 +423,8 @@ class FTAAuditFile(Document):
 
 		company_currency = _company_currency(self.company)
 
-		total_supply_aed = 0.0
-		total_vat_aed = 0.0
+		total_supply_company = 0.0
+		total_vat_company = 0.0
 		line_count = 0
 
 		for inv in invoices:
@@ -419,10 +433,14 @@ class FTAAuditFile(Document):
 			fcy_code, fcy_factor = _fcy_for_invoice(inv.currency, inv.conversion_rate, company_currency)
 
 			for item in items_by_invoice.get(inv.name, []):
-				net_aed = flt(item.base_net_amount, 2)
-				vat_aed = flt(item.tax_amount or 0, 2)
-				net_fcy = flt((item.net_amount or 0) if fcy_code != "XXX" else 0, 2)
-				vat_fcy = flt(vat_aed / fcy_factor if fcy_factor else 0, 2) if fcy_code != "XXX" else 0.0
+				# See _write_purchase_listing for the currency convention:
+				# tax_amount is invoice-currency, base_net_amount is
+				# company-currency, and fcy_factor converts invoice → company.
+				net_company = flt(item.base_net_amount, 2)
+				vat_invoice = flt(item.tax_amount or 0, 2)
+				vat_company = flt(vat_invoice * fcy_factor, 2)
+				net_fcy = flt(item.net_amount or 0, 2) if fcy_code != "XXX" else 0.0
+				vat_fcy = vat_invoice if fcy_code != "XXX" else 0.0
 
 				if item.is_zero_rated:
 					tax_code = "ZR"
@@ -439,8 +457,8 @@ class FTAAuditFile(Document):
 						inv.name,
 						item.idx,
 						_clean(item.description or item.item_name or ""),
-						_money(net_aed),
-						_money(vat_aed),
+						_money(net_company),
+						_money(vat_company),
 						tax_code,
 						_clean(customer_country),
 						fcy_code,
@@ -448,15 +466,15 @@ class FTAAuditFile(Document):
 						_money(vat_fcy),
 					]
 				)
-				total_supply_aed += net_aed
-				total_vat_aed += vat_aed
+				total_supply_company += net_company
+				total_vat_company += vat_company
 				line_count += 1
 
 		writer.writerow(
 			[
 				"SuppDataEnd",
-				_money(total_supply_aed),
-				_money(total_vat_aed),
+				_money(total_supply_company),
+				_money(total_vat_company),
 				line_count,
 			]
 		)
@@ -465,6 +483,8 @@ class FTAAuditFile(Document):
 	def _write_gl_listing(self, writer):
 		"""Emit General Ledger per Appendix 5 with end-of-table totals row."""
 		writer.writerow(["GLDataStart"])
+
+		company_currency = _company_currency(self.company)
 
 		entries = frappe.get_all(
 			"GL Entry",
@@ -487,7 +507,7 @@ class FTAAuditFile(Document):
 			order_by="posting_date asc, creation asc",
 		)
 		if not entries:
-			writer.writerow(["GLDataEnd", _money(0), _money(0), 0, "AED"])
+			writer.writerow(["GLDataEnd", _money(0), _money(0), 0, company_currency])
 			return 0
 
 		account_names = list({e.account for e in entries if e.account})
@@ -546,7 +566,7 @@ class FTAAuditFile(Document):
 				_money(total_debit),
 				_money(total_credit),
 				count,
-				"AED",
+				company_currency,
 			]
 		)
 		return count

@@ -48,6 +48,7 @@ def _cached(fn):
 
 
 def execute(filters=None):
+	filters = filters or {}
 	validate_company_region(filters)
 	_cache.clear()
 	columns = get_columns()
@@ -91,28 +92,27 @@ def get_data(filters=None):
 	append_vat_on_expenses(data, filters)
 	net_vat_due(data, filters, amounts_by_emirate)
 
-	emirate_drill_downs = {f"Standard rated supplies in {emirate}": emirate for emirate in get_emirates()}
-	dubai_legend = "Standard rated supplies in Dubai"
 	dubai_label_override = _company_emirate_label(filters)
 
 	final_data = []
 	for row in data:
+		key = row.get("_key")
 		legend = row.get("legend")
 		new_legend = legend
 
-		if legend in emirate_drill_downs:
-			emirate = emirate_drill_downs[legend]
-			label = dubai_label_override if legend == dubai_legend and dubai_label_override else legend
+		if key and key.startswith("emirate:"):
+			emirate = key.split(":", 1)[1]
+			label = dubai_label_override if emirate == "Dubai" and dubai_label_override else legend
 			new_legend = _drill_down_link(
 				label, filters, doc_type="Sales Invoice", vat=emirate, category="Standard"
 			)
-		elif legend == "Supplies subject to the reverse charge provision":
+		elif key == "reverse_charge_supplies":
 			new_legend = _drill_down_link(legend, filters, doc_type="Purchase Invoice", reverse_charge="Y")
-		elif legend == "Zero Rated":
+		elif key == "zero_rated":
 			new_legend = _drill_down_link(legend, filters, doc_type="Sales Invoice", category="Zero Rated")
-		elif legend == "Exempt Supplies":
+		elif key == "exempt_supplies":
 			new_legend = _drill_down_link(legend, filters, doc_type="Sales Invoice", category="Exempt Rated")
-		elif legend == "Standard Rated Expenses":
+		elif key == "standard_rated_expenses":
 			new_legend = _drill_down_link(legend, filters, doc_type="Purchase Invoice")
 
 		final_data.append(
@@ -176,11 +176,26 @@ def append_vat_on_sales(data, filters):
 		_("Supplies subject to the reverse charge provision"),
 		frappe.format(get_reverse_charge_total(filters), "Currency"),
 		frappe.format(get_reverse_charge_tax(filters), "Currency"),
+		key="reverse_charge_supplies",
 	)
 
-	append_data(data, "4", _("Zero Rated"), frappe.format(get_zero_rated_total(filters), "Currency"), "-")
+	append_data(
+		data,
+		"4",
+		_("Zero Rated"),
+		frappe.format(get_zero_rated_total(filters), "Currency"),
+		"-",
+		key="zero_rated",
+	)
 
-	append_data(data, "5", _("Exempt Supplies"), frappe.format(get_exempt_total(filters), "Currency"), "-")
+	append_data(
+		data,
+		"5",
+		_("Exempt Supplies"),
+		frappe.format(get_exempt_total(filters), "Currency"),
+		"-",
+		key="exempt_supplies",
+	)
 
 	append_data(
 		data,
@@ -230,6 +245,7 @@ def append_emiratewise_expenses(data, emirates, amounts_by_emirate):
 		if emirate in amounts_by_emirate:
 			amounts_by_emirate[emirate]["no"] = _("1{0}").format(chr(no))
 			amounts_by_emirate[emirate]["legend"] = _("Standard rated supplies in {0}").format(emirate)
+			amounts_by_emirate[emirate]["_key"] = f"emirate:{emirate}"
 			data.append(amounts_by_emirate[emirate])
 
 			s_amount.append(amounts_by_emirate[emirate].get("raw_amount") or 0)
@@ -241,6 +257,7 @@ def append_emiratewise_expenses(data, emirates, amounts_by_emirate):
 				_("Standard rated supplies in {0}").format(emirate),
 				frappe.format(0, "Currency"),
 				frappe.format(0, "Currency"),
+				key=f"emirate:{emirate}",
 			)
 	return amounts_by_emirate, s_amount, v_amount
 
@@ -254,6 +271,7 @@ def append_vat_on_expenses(data, filters):
 		_("Standard Rated Expenses"),
 		frappe.format(get_standard_rated_expenses_total(filters), "Currency"),
 		frappe.format(get_standard_rated_expenses_tax(filters), "Currency"),
+		key="standard_rated_expenses",
 	)
 	append_data(
 		data,
@@ -318,9 +336,15 @@ def net_vat_due(data, filters, amounts_by_emirate):
 	)
 
 
-def append_data(data, no, legend, amount, vat_amount):
-	"""Returns data with appended value."""
-	data.append({"no": no, "legend": legend, "amount": amount, "vat_amount": vat_amount})
+def append_data(data, no, legend, amount, vat_amount, key=None):
+	"""Append one row to ``data``.
+
+	``key`` (when provided) is a language-independent identifier used by
+	``get_data`` to decide which rows get drill-down links. Without it,
+	dispatch would have to match the localized ``legend`` text and would
+	silently break under any non-English language.
+	"""
+	data.append({"no": no, "legend": legend, "amount": amount, "vat_amount": vat_amount, "_key": key})
 
 
 def format_currency_signed(value):
