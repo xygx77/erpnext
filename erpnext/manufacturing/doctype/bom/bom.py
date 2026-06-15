@@ -373,13 +373,6 @@ class BOM(WebsiteGenerator):
 					).format(item.idx, get_link_to_form("Item", item.item_code))
 				)
 
-			if item.qty is None:
-				frappe.throw(
-					_("Row #{0}: Quantity is required for {1} Item {2}").format(
-						item.idx, item.secondary_item_type, get_link_to_form("Item", item.item_code)
-					)
-				)
-
 			if item.process_loss_per >= 100:
 				frappe.throw(
 					_("Row #{0}: Process Loss Percentage should be less than 100% for {1} Item {2}").format(
