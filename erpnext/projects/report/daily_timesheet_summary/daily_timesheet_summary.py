@@ -4,17 +4,19 @@
 
 import frappe
 from frappe import _
-from frappe.desk.reportview import get_match_conditions_qb
-from frappe.utils import add_days, getdate
-
-from erpnext.stock.utils import get_combine_datetime
+from frappe.desk.reportview import build_match_conditions
 
 
 def execute(filters=None):
-	filters = filters or {}
+	if not filters:
+		filters = {}
+	elif filters.get("from_date") or filters.get("to_date"):
+		filters["from_time"] = "00:00:00"
+		filters["to_time"] = "24:00:00"
 
 	columns = get_column()
-	data = get_data(filters)
+	conditions = get_conditions(filters)
+	data = get_data(conditions, filters)
 
 	return columns, data
 
@@ -34,40 +36,30 @@ def get_column():
 	]
 
 
-def get_data(filters):
-	ts = frappe.qb.DocType("Timesheet")
-	tsd = frappe.qb.DocType("Timesheet Detail")
-
-	query = (
-		frappe.qb.from_(tsd)
-		.inner_join(ts)
-		.on(tsd.parent == ts.name)
-		.select(
-			ts.name,
-			ts.employee,
-			ts.employee_name,
-			tsd.from_time,
-			tsd.to_time,
-			tsd.hours,
-			tsd.activity_type,
-			tsd.task,
-			tsd.project,
-			ts.status,
-		)
-		.where(ts.docstatus == 1)
+def get_data(conditions, filters):
+	time_sheet = frappe.db.sql(
+		""" select `tabTimesheet`.name, `tabTimesheet`.employee, `tabTimesheet`.employee_name,
+		`tabTimesheet Detail`.from_time, `tabTimesheet Detail`.to_time, `tabTimesheet Detail`.hours,
+		`tabTimesheet Detail`.activity_type, `tabTimesheet Detail`.task, `tabTimesheet Detail`.project,
+		`tabTimesheet`.status from `tabTimesheet Detail`, `tabTimesheet` where
+		`tabTimesheet Detail`.parent = `tabTimesheet`.name and %s order by `tabTimesheet`.name"""
+		% (conditions),
+		filters,
+		as_list=1,
 	)
 
+	return time_sheet
+
+
+def get_conditions(filters):
+	conditions = "`tabTimesheet`.docstatus = 1"
 	if filters.get("from_date"):
-		query = query.where(tsd.from_time >= get_combine_datetime(filters.get("from_date"), "00:00:00"))
-
+		conditions += " and `tabTimesheet Detail`.from_time >= timestamp(%(from_date)s, %(from_time)s)"
 	if filters.get("to_date"):
-		# upper bound is the end of to_date, i.e. midnight of the next day
-		# (matches the original `timestamp(to_date, '24:00:00')`)
-		end_of_to_date = get_combine_datetime(add_days(getdate(filters.get("to_date")), 1), "00:00:00")
-		query = query.where(tsd.to_time <= end_of_to_date)
+		conditions += " and `tabTimesheet Detail`.to_time <= timestamp(%(to_date)s, %(to_time)s)"
 
-	# apply Timesheet user-permission match conditions (query-builder form of build_match_conditions)
-	for condition in get_match_conditions_qb("Timesheet"):
-		query = query.where(condition)
+	match_conditions = build_match_conditions("Timesheet")
+	if match_conditions:
+		conditions += " and (%s)" % match_conditions
 
-	return query.orderby(ts.name).run(as_list=True)
+	return conditions
