@@ -1584,3 +1584,165 @@ def get_item_prices(item_code: str):
 		"prices": prices[:10],
 		"has_more": has_more,
 	}
+
+
+@frappe.whitelist()
+def make_opening_stock_entry(
+	item_code: str,
+	company: str,
+	qty: float,
+	valuation_rate: float,
+	warehouse: str | None = None,
+):
+	if not frappe.has_permission("Item", "write", item_code):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	item = frappe.get_doc("Item", item_code)
+
+	if not item.is_stock_item:
+		frappe.throw(_("Opening Stock can only be set for stock items."))
+	if item.stock_ledger_created():
+		frappe.throw(
+			_("Opening Stock cannot be created as stock transactions already exist for item {0}.").format(
+				frappe.bold(item_code)
+			)
+		)
+
+	if flt(qty) <= 0:
+		frappe.throw(_("Quantity must be greater than zero."))
+
+	if flt(valuation_rate) < 0:
+		frappe.throw(_("Valuation Rate cannot be negative."))
+
+	if warehouse:
+		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
+		if warehouse_company != company:
+			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
+
+	target_warehouse = get_default_warehouse_for_opening_stock(item, company, warehouse)
+
+	opening_account = frappe.db.get_value(
+		"Account",
+		{"company": company, "account_type": "Temporary", "is_group": 0},
+		"name",
+	)
+
+	if not opening_account:
+		frappe.throw(
+			_(
+				"Please set a Temporary Opening account for company {0} to create an Opening Stock reconciliation."
+			).format(frappe.bold(company))
+		)
+
+	stock_reco = create_opening_stock_reconciliation(
+		item_code=item_code,
+		company=company,
+		qty=qty,
+		valuation_rate=valuation_rate,
+		warehouse=target_warehouse,
+		expense_account=opening_account,
+	)
+	stock_reco.add_comment("Comment", _("Opening Stock"))
+
+	frappe.msgprint(
+		_("Opening Stock reconciliation created: {0}").format(
+			get_link_to_form("Stock Reconciliation", stock_reco.name)
+		),
+		indicator="green",
+		alert=True,
+	)
+
+	return stock_reco.name
+
+
+def create_opening_stock_reconciliation(
+	item_code: str,
+	company: str,
+	qty: float,
+	valuation_rate: float,
+	warehouse: str,
+	expense_account: str,
+):
+	stock_reco = frappe.get_doc(
+		{
+			"doctype": "Stock Reconciliation",
+			"purpose": "Opening Stock",
+			"company": company,
+			"expense_account": expense_account,
+			"items": [
+				{
+					"item_code": item_code,
+					"warehouse": warehouse,
+					"qty": flt(qty),
+					"valuation_rate": flt(valuation_rate),
+					"allow_zero_valuation_rate": 1 if flt(valuation_rate) == 0 else 0,
+					"reconcile_all_serial_batch": 1,
+				}
+			],
+		}
+	)
+
+	stock_reco.insert()
+	set_opening_stock_serial_batch_bundle(stock_reco)
+	stock_reco.submit()
+
+	return stock_reco
+
+
+def set_opening_stock_serial_batch_bundle(stock_reco):
+	row = stock_reco.items[0]
+	item_details = frappe.get_cached_value(
+		"Item", row.item_code, ["has_serial_no", "has_batch_no"], as_dict=1
+	)
+
+	if not (item_details.has_serial_no or item_details.has_batch_no):
+		return
+
+	bundle = SerialBatchCreation(
+		{
+			"item_code": row.item_code,
+			"warehouse": row.warehouse,
+			"voucher_type": stock_reco.doctype,
+			"voucher_no": stock_reco.name,
+			"voucher_detail_no": row.name,
+			"posting_date": stock_reco.posting_date,
+			"posting_time": stock_reco.posting_time,
+			"qty": row.qty,
+			"avg_rate": row.valuation_rate,
+			"type_of_transaction": "Inward",
+			"company": stock_reco.company,
+			"do_not_submit": True,
+		}
+	).make_serial_and_batch_bundle()
+
+	if not bundle:
+		return
+
+	row.db_set("serial_and_batch_bundle", bundle.name, update_modified=False)
+	row.serial_and_batch_bundle = bundle.name
+
+
+def get_default_warehouse_for_opening_stock(item, company: str, warehouse: str | None):
+	if warehouse:
+		return warehouse
+
+	for default in item.item_defaults:
+		if default.company == company and default.default_warehouse:
+			return default.default_warehouse
+
+	settings_warehouse = frappe.get_single_value("Stock Settings", "default_warehouse")
+	if settings_warehouse:
+		warehouse_company = frappe.db.get_value("Warehouse", settings_warehouse, "company")
+		if warehouse_company == company:
+			return settings_warehouse
+
+	stores_warehouse = frappe.db.get_value("Warehouse", {"warehouse_name": _("Stores"), "company": company})
+
+	if stores_warehouse:
+		return stores_warehouse
+
+	frappe.throw(
+		_(
+			"No warehouse found for company {0}. Please set a Default Warehouse in Item Defaults or Stock Settings."
+		).format(frappe.bold(company))
+	)
