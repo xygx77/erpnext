@@ -2917,6 +2917,49 @@ class TestProductionPlan(ERPNextTestSuite):
 		self.assertEqual(by_bom_no[phantom_bom.name].is_phantom_item, 1)
 		self.assertEqual(by_bom_no[normal_bom.name].is_phantom_item, 0)
 
+	def test_subitems_query_keeps_real_rm_listed_alongside_phantom(self):
+		"""bom_explosion._subitems_query groups BOM lines by item_code, and get_subitems() drops any
+		grouped row whose is_phantom_item is truthy. When one item_code is listed in a BOM both as a
+		phantom sub-assembly and as a plain raw material, Max(is_phantom_item)=1 made get_subitems
+		silently drop the real material. Min(is_phantom_item) keeps it (phantom only when every line
+		is phantom) and is deterministic on MariaDB and Postgres.
+		"""
+		from erpnext.manufacturing.doctype.production_plan.services.bom_explosion import _subitems_query
+
+		component = make_item(properties={"is_stock_item": 1, "valuation_rate": 10}).name
+		rm_phantom = make_item(properties={"is_stock_item": 1, "valuation_rate": 10}).name
+
+		phantom_bom = make_bom(item=component, raw_materials=[rm_phantom], do_not_save=True)
+		phantom_bom.is_phantom_bom = 1
+		phantom_bom.save()
+		phantom_bom.submit()
+		# the phantom BOM is auto-set as the component's default; clear it so the second component line
+		# stays a plain (non-phantom) raw material instead of inheriting the phantom BOM as its bom_no.
+		frappe.db.set_value("Item", component, "default_bom", "")
+		frappe.clear_document_cache("Item", component)
+
+		fg_item = make_item(properties={"is_stock_item": 1, "valuation_rate": 10}).name
+		parent = make_bom(item=fg_item, raw_materials=[component], do_not_save=True)
+		parent.items[0].bom_no = phantom_bom.name  # phantom line -> is_phantom_item = 1
+		component_doc = frappe.get_doc("Item", component)
+		parent.append(
+			"items",
+			{
+				"item_code": component,
+				"qty": 1,
+				"uom": component_doc.stock_uom,
+				"stock_uom": component_doc.stock_uom,
+			},
+		)  # plain raw-material line (no bom_no) -> is_phantom_item = 0
+		parent.save()
+		parent.submit()
+
+		rows = _subitems_query("_Test Company", parent.name, 1, 1, 1)
+		component_rows = [r for r in rows if r.item_code == component]
+		self.assertEqual(len(component_rows), 1)
+		# Min() keeps the real material; the old Max() returned 1 and get_subitems dropped it.
+		self.assertEqual(component_rows[0].is_phantom_item, 0)
+
 
 def create_production_plan(**args):
 	"""
