@@ -165,75 +165,90 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 			return
 
 		for item in doc.get("items"):
-			if not item.delivery_note and not item.dn_detail:
-				continue
+			booking = self._sdbnb_booking_for_item(item)
+			if booking:
+				self._append_sdbnb_gl_entries(item, booking, gl_entries)
 
-			if not frappe.get_cached_value("Item", item.item_code, "is_stock_item"):
-				continue
+	def _sdbnb_booking_for_item(self, item) -> dict | None:
+		"""SDBNB account and valuation to reverse for a billed-from-delivery-note item, if any."""
+		if not item.delivery_note and not item.dn_detail:
+			return None
 
-			dn_expense_account = frappe.get_cached_value(
-				"Delivery Note Item", item.dn_detail, "expense_account"
-			)
-			if (
-				not dn_expense_account
-				or frappe.get_cached_value("Account", dn_expense_account, "account_type")
-				!= "Stock Delivered But Not Billed"
-				or not item.expense_account
-				or dn_expense_account == item.expense_account
-			):
-				continue
+		if not frappe.get_cached_value("Item", item.item_code, "is_stock_item"):
+			return None
 
-			delivery_note = item.delivery_note or frappe.get_cached_value(
-				"Delivery Note Item", item.dn_detail, "parent"
-			)
-			if not delivery_note:
-				continue
+		dn_expense_account = frappe.get_cached_value("Delivery Note Item", item.dn_detail, "expense_account")
+		if not self._is_sdbnb_reversal(dn_expense_account, item):
+			return None
 
-			item_g = frappe.get_cached_value(
-				"Stock Ledger Entry",
+		delivery_note = item.delivery_note or frappe.get_cached_value(
+			"Delivery Note Item", item.dn_detail, "parent"
+		)
+		if not delivery_note:
+			return None
+
+		item_g = frappe.get_cached_value(
+			"Stock Ledger Entry",
+			{
+				"voucher_no": delivery_note,
+				"voucher_detail_no": item.dn_detail,
+				"item_code": item.item_code,
+				"is_cancelled": 0,
+			},
+			["stock_value_difference", "actual_qty"],
+			as_dict=True,
+		)
+		if not item_g or not flt(item_g.actual_qty):
+			return None
+
+		valuation_rate = flt(item_g.stock_value_difference) / flt(item_g.actual_qty)
+		return {
+			"dn_expense_account": dn_expense_account,
+			"valuation_amount": valuation_rate * item.stock_qty,
+		}
+
+	def _is_sdbnb_reversal(self, dn_expense_account, item) -> bool:
+		"""True when the DN booked to an SDBNB account distinct from the item's expense account."""
+		return bool(
+			dn_expense_account
+			and frappe.get_cached_value("Account", dn_expense_account, "account_type")
+			== "Stock Delivered But Not Billed"
+			and item.expense_account
+			and dn_expense_account != item.expense_account
+		)
+
+	def _append_sdbnb_gl_entries(self, item, booking, gl_entries) -> None:
+		dn_expense_account = booking["dn_expense_account"]
+		valuation_amount = booking["valuation_amount"]
+		dn_account_currency = get_account_currency(dn_expense_account)
+		item_account_currency = get_account_currency(item.expense_account)
+
+		gl_entries.append(
+			self.get_gl_dict(
 				{
-					"voucher_no": delivery_note,
-					"voucher_detail_no": item.dn_detail,
-					"item_code": item.item_code,
-					"is_cancelled": 0,
+					"account": dn_expense_account,
+					"against": item.expense_account,
+					"credit": flt(valuation_amount),
+					"credit_in_account_currency": flt(valuation_amount),
+					"cost_center": item.cost_center,
 				},
-				["stock_value_difference", "actual_qty"],
-				as_dict=True,
+				dn_account_currency,
+				item=item,
 			)
-
-			if not item_g or not flt(item_g.actual_qty):
-				continue
-			valuation_rate = flt(item_g.stock_value_difference) / flt(item_g.actual_qty)
-			valuation_amount = valuation_rate * item.stock_qty
-			dn_account_currency = get_account_currency(dn_expense_account)
-			item_account_currency = get_account_currency(item.expense_account)
-
-			gl_entries.append(
-				self.get_gl_dict(
-					{
-						"account": dn_expense_account,
-						"against": item.expense_account,
-						"credit": flt(valuation_amount),
-						"credit_in_account_currency": flt(valuation_amount),
-						"cost_center": item.cost_center,
-					},
-					dn_account_currency,
-					item=item,
-				)
+		)
+		gl_entries.append(
+			self.get_gl_dict(
+				{
+					"account": item.expense_account,
+					"against": dn_expense_account,
+					"debit": flt(valuation_amount),
+					"debit_in_account_currency": flt(valuation_amount),
+					"cost_center": item.cost_center,
+				},
+				item_account_currency,
+				item=item,
 			)
-			gl_entries.append(
-				self.get_gl_dict(
-					{
-						"account": item.expense_account,
-						"against": dn_expense_account,
-						"debit": flt(valuation_amount),
-						"debit_in_account_currency": flt(valuation_amount),
-						"cost_center": item.cost_center,
-					},
-					item_account_currency,
-					item=item,
-				)
-			)
+		)
 
 	def make_customer_gl_entry(self, gl_entries):
 		doc = self.doc
@@ -523,9 +538,9 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 					"party": doc.customer,
 					"against": doc.account_for_change_amount,
 					"debit": flt(doc.base_change_amount),
-					"debit_in_account_currency": flt(doc.base_change_amount)
-					if doc.party_account_currency == doc.company_currency
-					else flt(doc.change_amount),
+					"debit_in_account_currency": self._amount_in_account_currency(
+						doc.party_account_currency, flt(doc.base_change_amount), flt(doc.change_amount)
+					),
 					"debit_in_transaction_currency": flt(doc.change_amount),
 					"against_voucher": doc.return_against
 					if cint(doc.is_return) and doc.return_against
