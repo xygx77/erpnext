@@ -233,13 +233,29 @@ def get_bom_data(filters):
 		else:
 			query = query.where(bin.warehouse == filters.get("warehouse"))
 
-	if bom_item_table == "BOM Item":
-		query = query.select(
-			Max(bom_item.bom_no).as_("bom_no"), Max(bom_item.is_phantom_item).as_("is_phantom_item")
-		)
-
 	data = query.run(as_dict=True)
-	return explode_phantom_boms(data, filters) if bom_item_table == "BOM Item" else data
+
+	if bom_item_table == "BOM Item":
+		# bom_no + is_phantom_item drive whether/which sub-BOM explode_phantom_boms recurses into, so
+		# they must come from the SAME BOM Item line. Aggregating each independently (Max) could pair a
+		# bom_no from one line with is_phantom_item from another when an item_code repeats in the BOM.
+		# Take the first (lowest idx) line per item_code as the coherent representative.
+		first_line = {}
+		for line in frappe.get_all(
+			"BOM Item",
+			filters={"parent": filters.get("bom"), "parenttype": "BOM"},
+			fields=["item_code", "bom_no", "is_phantom_item"],
+			order_by="idx",
+		):
+			first_line.setdefault(line.item_code, line)
+		for row in data:
+			line = first_line.get(row.item_code)
+			if line:
+				row.bom_no = line.bom_no
+				row.is_phantom_item = line.is_phantom_item
+		return explode_phantom_boms(data, filters)
+
+	return data
 
 
 def explode_phantom_boms(data, filters):

@@ -2862,6 +2862,61 @@ class TestProductionPlan(ERPNextTestSuite):
 			"The phantom BOM was not re-exploded for the second po_item.",
 		)
 
+	def test_sub_assembly_rm_query_keeps_bom_no_phantom_pair_coherent(self):
+		"""bom_no and is_phantom_item must stay paired to the same BOM Item line.
+
+		When a component is listed more than once in a sub-assembly BOM pointing at different
+		sub-BOMs (one phantom, one not), grouping only by (item_code, stock_uom) collapsed both
+		lines into one row, and the independent Max() per column could pair the phantom flag of
+		one line with the bom_no of the other. The consumer keys on (item_code, bom_no) and
+		recurses on is_phantom_item, so an incoherent pair recurses into the wrong sub-BOM.
+		Grouping also by (bom_no, is_phantom_item) yields one coherent row per distinct sub-BOM.
+		"""
+		from erpnext.manufacturing.doctype.production_plan.services.sub_assembly_queries import (
+			_sub_assembly_rm_query,
+		)
+
+		rm_phantom = make_item(properties={"is_stock_item": 1, "valuation_rate": 10}).name
+		rm_normal = make_item(properties={"is_stock_item": 1, "valuation_rate": 10}).name
+		component = make_item(properties={"is_stock_item": 1, "valuation_rate": 10}).name
+
+		# Phantom sub-BOM first (smaller auto-name); non-phantom second (larger name) -> the name
+		# the old Max(bom_no) would pick, while Max(is_phantom_item)=1 came from the phantom line.
+		phantom_bom = make_bom(item=component, raw_materials=[rm_phantom], do_not_save=True)
+		phantom_bom.is_phantom_bom = 1
+		phantom_bom.save()
+		phantom_bom.submit()
+		normal_bom = make_bom(item=component, raw_materials=[rm_normal])
+
+		# Sub-assembly BOM lists `component` twice, once via each sub-BOM.
+		sa_item = make_item(properties={"is_stock_item": 1, "valuation_rate": 10}).name
+		sa_bom = make_bom(item=sa_item, raw_materials=[component], do_not_save=True)
+		sa_bom.items[0].bom_no = phantom_bom.name
+		component_doc = frappe.get_doc("Item", component)
+		sa_bom.append(
+			"items",
+			{
+				"item_code": component,
+				"qty": 1,
+				"uom": component_doc.stock_uom,
+				"stock_uom": component_doc.stock_uom,
+				"bom_no": normal_bom.name,
+			},
+		)
+		sa_bom.save()
+		sa_bom.submit()
+
+		rows = _sub_assembly_rm_query(
+			company="_Test Company", bom_no=sa_bom.name, include_non_stock_items=1, planned_qty=1
+		)
+		by_bom_no = {row.bom_no: row for row in rows if row.item_code == component}
+
+		# One coherent row per distinct sub-BOM, each carrying its own phantom flag.
+		self.assertIn(phantom_bom.name, by_bom_no)
+		self.assertIn(normal_bom.name, by_bom_no)
+		self.assertEqual(by_bom_no[phantom_bom.name].is_phantom_item, 1)
+		self.assertEqual(by_bom_no[normal_bom.name].is_phantom_item, 0)
+
 
 def create_production_plan(**args):
 	"""
