@@ -6,7 +6,7 @@ import frappe
 from frappe import _, bold
 from frappe.model.document import Document
 from frappe.model.mapper import map_child_doc, map_doc
-from frappe.query_builder.functions import IfNull, Sum
+from frappe.query_builder.functions import IfNull, Lower, Sum
 from frappe.utils import cint, flt, get_link_to_form, getdate, nowdate
 from frappe.utils.nestedset import get_descendants_of
 
@@ -505,16 +505,20 @@ class POSInvoice(SalesInvoice):
 			if d.get("serial_no"):
 				serial_nos = get_serial_nos(d.serial_no)
 				for sr in serial_nos:
-					serial_no_exists = frappe.get_all(
-						"POS Invoice Item",
-						filters={"parent": self.return_against},
-						or_filters=[
-							["serial_no", "=", sr],
-							["serial_no", "like", f"{sr}\n%"],
-							["serial_no", "like", f"%\n{sr}"],
-							["serial_no", "like", f"%\n{sr}\n%"],
-						],
-						limit=1,
+					POI = frappe.qb.DocType("POS Invoice Item")
+					s = sr.lower()
+					serial_no_exists = (
+						frappe.qb.from_(POI)
+						.select(POI.name)
+						.where(POI.parent == self.return_against)
+						.where(
+							(Lower(POI.serial_no) == s)
+							| Lower(POI.serial_no).like(f"{s}\n%")
+							| Lower(POI.serial_no).like(f"%\n{s}")
+							| Lower(POI.serial_no).like(f"%\n{s}\n%")
+						)
+						.limit(1)
+						.run()
 					)
 
 					if not serial_no_exists:

@@ -10,7 +10,7 @@ from frappe import qb, scrub
 from frappe.desk.reportview import get_filters_cond, get_match_cond
 from frappe.permissions import has_permission
 from frappe.query_builder import Case, Criterion, DocType
-from frappe.query_builder.functions import Concat, CustomFunction, Length, Locate, Substring, Sum
+from frappe.query_builder.functions import Concat, CustomFunction, Length, Locate, Lower, Substring, Sum
 from frappe.utils import nowdate, today, unique
 from pypika import Order
 
@@ -313,11 +313,19 @@ def item_query(
 		.where(date_condition)
 		.where(Criterion.any(search_conditions))
 		.orderby(
-			Case().when(Locate(txt_no_percent, item.name) > 0, Locate(txt_no_percent, item.name)).else_(99999)
+			Case()
+			.when(
+				Locate(Lower(txt_no_percent), Lower(item.name)) > 0,
+				Locate(Lower(txt_no_percent), Lower(item.name)),
+			)
+			.else_(99999)
 		)
 		.orderby(
 			Case()
-			.when(Locate(txt_no_percent, item.item_name) > 0, Locate(txt_no_percent, item.item_name))
+			.when(
+				Locate(Lower(txt_no_percent), Lower(item.item_name)) > 0,
+				Locate(Lower(txt_no_percent), Lower(item.item_name)),
+			)
 			.else_(99999)
 		)
 		.orderby(item.idx, order=Order.desc)
@@ -406,7 +414,13 @@ def get_project_name(
 	# ordering
 	if txt:
 		# project_name containing search string 'txt' will be given higher precedence
-		q = q.orderby(ifelse(Locate(txt, proj.project_name) > 0, Locate(txt, proj.project_name), 99999))
+		q = q.orderby(
+			ifelse(
+				Locate(Lower(txt), Lower(proj.project_name)) > 0,
+				Locate(Lower(txt), Lower(proj.project_name)),
+				99999,
+			)
+		)
 	q = q.orderby(proj.idx, order=Order.desc).orderby(proj.name)
 
 	if page_len:

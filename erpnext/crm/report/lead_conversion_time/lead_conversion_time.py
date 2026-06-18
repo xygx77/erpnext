@@ -124,13 +124,16 @@ def get_communication_details(filters):
 				FROM
 					`tabCommunication`
 				WHERE
-					recipients  = %s
+					recipients  = %s AND communication_date IS NOT NULL
 				ORDER BY
 					communication_date
 				LIMIT 1
 			""",
 			(d.contact_email),
-		)[0][0]
+		)
+		first_contact = first_contact[0][0] if first_contact else None
+		if not first_contact:
+			continue
 
 		duration = flt(date_diff(invoice[0][0], first_contact))
 
