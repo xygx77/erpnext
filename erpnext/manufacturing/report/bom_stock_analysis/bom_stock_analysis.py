@@ -239,17 +239,21 @@ def get_bom_data(filters):
 		# bom_no + is_phantom_item drive whether/which sub-BOM explode_phantom_boms recurses into, so
 		# they must come from the SAME BOM Item line. Aggregating each independently (Max) could pair a
 		# bom_no from one line with is_phantom_item from another when an item_code repeats in the BOM.
-		# Take the first (lowest idx) line per item_code as the coherent representative.
-		first_line = {}
+		# Rows are grouped by item_code (one qty_per_unit total per component), so pick one coherent
+		# representative line: the first line, but upgrade to the first phantom line if any exists, so a
+		# phantom sub-BOM is never dropped just because a non-phantom line happens to be listed first.
+		representative = {}
 		for line in frappe.get_all(
 			"BOM Item",
 			filters={"parent": filters.get("bom"), "parenttype": "BOM"},
 			fields=["item_code", "bom_no", "is_phantom_item"],
 			order_by="idx",
 		):
-			first_line.setdefault(line.item_code, line)
+			existing = representative.get(line.item_code)
+			if existing is None or (line.is_phantom_item and not existing.is_phantom_item):
+				representative[line.item_code] = line
 		for row in data:
-			line = first_line.get(row.item_code)
+			line = representative.get(row.item_code)
 			if line:
 				row.bom_no = line.bom_no
 				row.is_phantom_item = line.is_phantom_item
