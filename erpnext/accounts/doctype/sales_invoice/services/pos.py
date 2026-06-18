@@ -4,7 +4,7 @@
 """POS helpers for Sales Invoice."""
 
 import frappe
-from frappe import _, msgprint
+from frappe import _
 from frappe.utils import cint, flt, get_link_to_form
 
 
@@ -280,38 +280,6 @@ class POSService:
 		for entry in self.doc.payments:
 			if entry.amount > 0:
 				frappe.throw(_("Row #{0} (Payment Table): Amount must be negative").format(entry.idx))
-
-	def get_warehouse(self) -> str | None:
-		doc = self.doc
-		POSProfile = frappe.qb.DocType("POS Profile")
-
-		user_query = (
-			frappe.qb.from_(POSProfile)
-			.select(POSProfile.name, POSProfile.warehouse)
-			.where(POSProfile.company == doc.company)
-			.where(
-				(POSProfile.user == frappe.session["user"])
-				| ((POSProfile.user.isnull() | (POSProfile.user == "")) & (frappe.session["user"] == ""))
-			)
-		)
-		user_pos_profile = user_query.run()
-		warehouse = user_pos_profile[0][1] if user_pos_profile else None
-
-		if not warehouse:
-			global_query = (
-				frappe.qb.from_(POSProfile)
-				.select(POSProfile.name, POSProfile.warehouse)
-				.where(POSProfile.company == doc.company)
-				.where(POSProfile.user.isnull() | (POSProfile.user == ""))
-			)
-			global_pos_profile = global_query.run()
-
-			if global_pos_profile:
-				warehouse = global_pos_profile[0][1]
-			elif not user_pos_profile:
-				msgprint(_("POS Profile required to make POS Entry"), raise_exception=True)
-
-		return warehouse
 
 
 def get_bank_cash_account(mode_of_payment: str, company: str) -> dict:
