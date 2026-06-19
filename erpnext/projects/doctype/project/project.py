@@ -240,8 +240,29 @@ class Project(Document):
 
 	def after_insert(self):
 		self.copy_from_template("after_insert")
-		if self.sales_order:
-			frappe.db.set_value("Sales Order", self.sales_order, "project", self.name)
+		self.link_with_sales_order()
+
+	def link_with_sales_order(self) -> None:
+		"""Back-link the source Sales Order to this project.
+
+		The link is set only when the Sales Order is not already tied to another
+		project, so projects created concurrently for the same Sales Order cannot
+		overwrite each other's reference.
+		"""
+		if not self.sales_order:
+			return
+
+		existing_project = frappe.db.get_value("Sales Order", self.sales_order, "project")
+		if existing_project and existing_project != self.name:
+			frappe.msgprint(
+				_("Sales Order {0} is already linked to Project {1}, skipping the link.").format(
+					self.sales_order, existing_project
+				),
+				alert=True,
+			)
+			return
+
+		frappe.db.set_value("Sales Order", self.sales_order, "project", self.name)
 
 	def on_trash(self):
 		frappe.db.set_value("Sales Order", {"project": self.name}, "project", "")
