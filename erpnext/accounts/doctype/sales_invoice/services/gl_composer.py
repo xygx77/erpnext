@@ -165,11 +165,11 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 			return
 
 		for item in doc.get("items"):
-			booking = self._sdbnb_booking_for_item(item)
+			booking = self._get_sdbnb_booking_for_item(item)
 			if booking:
 				self._append_sdbnb_gl_entries(item, booking, gl_entries)
 
-	def _sdbnb_booking_for_item(self, item) -> dict | None:
+	def _get_sdbnb_booking_for_item(self, item) -> dict | None:
 		"""SDBNB account and valuation to reverse for a billed-from-delivery-note item, if any."""
 		if not item.delivery_note and not item.dn_detail:
 			return None
@@ -275,11 +275,11 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 						"due_date": doc.due_date,
 						"against": doc.against_income_account,
 						"debit": base_grand_total,
-						"debit_in_account_currency": self._amount_in_account_currency(
+						"debit_in_account_currency": self._get_amount_in_account_currency(
 							doc.party_account_currency, base_grand_total, grand_total
 						),
 						"debit_in_transaction_currency": grand_total,
-						"against_voucher": self._return_aware_against_voucher(),
+						"against_voucher": self._resolve_against_voucher(),
 						"against_voucher_type": doc.doctype,
 						"cost_center": doc.cost_center,
 						"project": doc.project,
@@ -307,7 +307,7 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 							"account": tax.account_head,
 							"against": doc.customer,
 							"credit": flt(base_amount, tax.precision("tax_amount_after_discount_amount")),
-							"credit_in_account_currency": self._amount_in_account_currency(
+							"credit_in_account_currency": self._get_amount_in_account_currency(
 								account_currency,
 								flt(base_amount, tax.precision("base_tax_amount_after_discount_amount")),
 								flt(amount, tax.precision("tax_amount_after_discount_amount")),
@@ -389,7 +389,7 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 					"account": income_account,
 					"against": doc.customer,
 					"credit": flt(base_amount, item.precision("base_net_amount")),
-					"credit_in_account_currency": self._amount_in_account_currency(
+					"credit_in_account_currency": self._get_amount_in_account_currency(
 						account_currency,
 						flt(base_amount, item.precision("base_net_amount")),
 						flt(amount, item.precision("net_amount")),
@@ -486,11 +486,11 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 								"party": doc.customer,
 								"against": payment_mode.account,
 								"credit": payment_mode.base_amount,
-								"credit_in_account_currency": self._amount_in_account_currency(
+								"credit_in_account_currency": self._get_amount_in_account_currency(
 									doc.party_account_currency, payment_mode.base_amount, payment_mode.amount
 								),
 								"credit_in_transaction_currency": payment_mode.amount,
-								"against_voucher": self._return_aware_against_voucher(),
+								"against_voucher": self._resolve_against_voucher(),
 								"against_voucher_type": doc.doctype,
 								"cost_center": doc.cost_center,
 							},
@@ -506,7 +506,7 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 								"account": payment_mode.account,
 								"against": doc.customer,
 								"debit": payment_mode.base_amount,
-								"debit_in_account_currency": self._amount_in_account_currency(
+								"debit_in_account_currency": self._get_amount_in_account_currency(
 									payment_mode_account_currency,
 									payment_mode.base_amount,
 									payment_mode.amount,
@@ -538,7 +538,7 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 					"party": doc.customer,
 					"against": doc.account_for_change_amount,
 					"debit": flt(doc.base_change_amount),
-					"debit_in_account_currency": self._amount_in_account_currency(
+					"debit_in_account_currency": self._get_amount_in_account_currency(
 						doc.party_account_currency, flt(doc.base_change_amount), flt(doc.change_amount)
 					),
 					"debit_in_transaction_currency": flt(doc.change_amount),
@@ -583,7 +583,7 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 						"party": doc.customer,
 						"against": doc.write_off_account,
 						"credit": flt(doc.base_write_off_amount, doc.precision("base_write_off_amount")),
-						"credit_in_account_currency": self._amount_in_account_currency(
+						"credit_in_account_currency": self._get_amount_in_account_currency(
 							doc.party_account_currency,
 							flt(doc.base_write_off_amount, doc.precision("base_write_off_amount")),
 							flt(doc.write_off_amount, doc.precision("write_off_amount")),
@@ -606,7 +606,7 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 						"account": doc.write_off_account,
 						"against": doc.customer,
 						"debit": flt(doc.base_write_off_amount, doc.precision("base_write_off_amount")),
-						"debit_in_account_currency": self._amount_in_account_currency(
+						"debit_in_account_currency": self._get_amount_in_account_currency(
 							write_off_account_currency,
 							flt(doc.base_write_off_amount, doc.precision("base_write_off_amount")),
 							flt(doc.write_off_amount, doc.precision("write_off_amount")),
@@ -673,11 +673,11 @@ class SalesInvoiceGLComposer(BaseGLComposer):
 				)
 			)
 
-	def _amount_in_account_currency(self, account_currency, base_amount, transaction_amount):
+	def _get_amount_in_account_currency(self, account_currency, base_amount, transaction_amount):
 		"""Base amount when the account is in company currency, else the transaction amount."""
 		return base_amount if account_currency == self.doc.company_currency else transaction_amount
 
-	def _return_aware_against_voucher(self) -> str:
+	def _resolve_against_voucher(self) -> str:
 		"""Settle against the original invoice for returns not kept on their own outstanding."""
 		doc = self.doc
 		if doc.is_return and doc.return_against and not doc.update_outstanding_for_self:
