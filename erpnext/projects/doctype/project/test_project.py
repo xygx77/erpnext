@@ -185,6 +185,7 @@ class TestProject(ERPNextTestSuite):
 		second_project = frappe.get_doc(
 			doctype="Project",
 			project_name="Second project for same sales order",
+			company=so.company,
 			sales_order=so.name,
 		).insert()
 		self.assertEqual(second_project.sales_order, so.name)
