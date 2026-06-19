@@ -128,7 +128,7 @@ frappe.ui.form.on("Journal Entry", {
 
 	get_balance(frm) {
 		erpnext.journal_entry.update_totals(frm);
-		frm.call("get_balance", {}, () => frm.refresh_fields());
+		frm.call("get_balance", {}, () => frm.refresh());
 	},
 
 	get_balance_for_periodic_accounting(frm) {
