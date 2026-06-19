@@ -764,6 +764,29 @@ class TestJournalEntry(ERPNextTestSuite):
 		self.assertEqual(blank_row.credit_in_account_currency, 100)
 		self.assertEqual(jv.total_debit, jv.total_credit)
 
+	def test_get_balance_recomputes_difference_ignoring_client_value(self):
+		"""get_balance computes its own difference instead of trusting a stale client-sent value."""
+		jv = frappe.new_doc("Journal Entry")
+		jv.company = "_Test Company"
+		jv.posting_date = nowdate()
+		jv.append(
+			"accounts",
+			{
+				"account": "_Test Cash - _TC",
+				"debit_in_account_currency": 100,
+				"debit": 100,
+				"exchange_rate": 1,
+			},
+		)
+		jv.append("accounts", {"account": "_Test Bank - _TC", "exchange_rate": 1})
+		# a stale/incorrect value as the client might send; get_balance must not rely on it
+		jv.difference = 0
+
+		jv.get_balance()
+		self.assertEqual(jv.accounts[1].credit_in_account_currency, 100)
+		self.assertEqual(jv.total_debit, jv.total_credit)
+		self.assertEqual(jv.difference, 0)
+
 	def test_get_outstanding_invoices_builds_write_off_rows(self):
 		"""Characterize: get_outstanding_invoices adds a party row for each outstanding invoice."""
 		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
