@@ -9,7 +9,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.model.meta import get_field_precision
 from frappe.query_builder.custom import ConstantColumn
-from frappe.query_builder.functions import Sum
+from frappe.query_builder.functions import Max, Sum
 from frappe.utils import cint, flt
 
 import erpnext
@@ -395,12 +395,12 @@ class LandedCostVoucher(Document):
 			if not item.is_fixed_asset and item.serial_no:
 				serial_nos = get_serial_nos(item.serial_no)
 				if serial_nos:
-					frappe.db.sql(
-						"update `tabSerial No` set purchase_rate=%s where name in ({})".format(
-							", ".join(["%s"] * len(serial_nos))
-						),
-						tuple([item.valuation_rate, *serial_nos]),
-					)
+					serial_no = frappe.qb.DocType("Serial No")
+					(
+						frappe.qb.update(serial_no)
+						.set(serial_no.purchase_rate, item.valuation_rate)
+						.where(serial_no.name.isin(serial_nos))
+					).run()
 
 	@frappe.whitelist()
 	def get_vendor_invoice_amount(self, vendor_invoice: str):
@@ -532,7 +532,7 @@ def set_landed_cost_voucher_amount(doc):
 		lcv_item = frappe.qb.DocType("Landed Cost Item")
 		query = (
 			frappe.qb.from_(lcv_item)
-			.select(Sum(lcv_item.applicable_charges), lcv_item.cost_center)
+			.select(Sum(lcv_item.applicable_charges), Max(lcv_item.cost_center))
 			.where((lcv_item.docstatus == 1) & (lcv_item.receipt_document == doc.name))
 		)
 
