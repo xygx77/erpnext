@@ -17,9 +17,12 @@ def get_list_context(context=None):
 		"currency": frappe.db.get_default("currency"),
 		"currency_symbols": json.dumps(
 			dict(
-				frappe.db.sql(
-					"""select name, symbol
-			from tabCurrency where enabled=1"""
+				frappe.get_all(
+					"Currency",
+					filters={"enabled": 1},
+					fields=["name", "symbol"],
+					as_list=True,
+					limit_page_length=0,  # all enabled currencies are needed for the symbol map
 				)
 			)
 		),
