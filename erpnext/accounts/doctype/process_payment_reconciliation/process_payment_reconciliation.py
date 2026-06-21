@@ -503,7 +503,7 @@ def reconcile(doc: None | str = None) -> None:
 								)
 			else:
 				frappe.db.set_value("Process Payment Reconciliation Log", log, "status", "Reconciled")
-				frappe.db.set_value("Process Payment Reconciliation Log", log, "reconciled", True)
+				frappe.db.set_value("Process Payment Reconciliation Log", log, "reconciled", 1)
 				frappe.db.set_value("Process Payment Reconciliation", doc, "status", "Completed")
 
 

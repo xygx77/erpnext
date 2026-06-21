@@ -33,7 +33,7 @@ def _is_leading_index_column(doctype: str, field: str) -> bool:
 	# `table` is a trusted constant (from INDEXED_FIELDS); a table identifier can't be a %s
 	# placeholder in SHOW INDEX, so the f-string is unavoidable and safe here.
 	return bool(
-		frappe.db.sql(
+		frappe.db.sql(  # pg-ok: MariaDB-only branch; Postgres is handled above via pg_index
 			f"""SHOW INDEX FROM `{table}` WHERE Column_name = %s AND Seq_in_index = 1""",
 			(field,),
 		)
