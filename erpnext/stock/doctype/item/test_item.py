@@ -778,10 +778,13 @@ class TestItem(ERPNextTestSuite):
 	def test_index_creation(self):
 		"check if index is getting created in db"
 
-		indices = frappe.db.sql("show index from tabItem", as_dict=1)
+		# get_column_index is db-agnostic; raw "SHOW INDEX" is MySQL-only and errors on Postgres
 		expected_columns = {"item_code", "item_name", "item_group"}
-		for index in indices:
-			expected_columns.discard(index.get("Column_name"))
+		for column in list(expected_columns):
+			if frappe.db.get_column_index("tabItem", column, unique=False) or frappe.db.get_column_index(
+				"tabItem", column, unique=True
+			):
+				expected_columns.discard(column)
 
 		if expected_columns:
 			self.fail(f"Expected db index on these columns: {', '.join(expected_columns)}")
