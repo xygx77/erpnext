@@ -60,6 +60,20 @@ class TestSupplierScorecardVariable(ERPNextTestSuite):
 		self.assertEqual(get_on_time_shipments(scorecard), 1)
 		self.assertEqual(get_total_days_late(scorecard), 50)  # 5 days late * 10 qty
 
+	def test_split_on_time_receipts_count_as_one_shipment(self):
+		# A PO line fully received on time across two partial receipts is one on-time shipment
+		supplier = create_scorecard_supplier()
+		po = create_scorecard_po(supplier, add_days(nowdate(), 5), qty=10, rate=100)
+		for received in (6, 4):
+			receipt = make_pr_from_po(po.name)
+			receipt.items[0].qty = received
+			receipt.items[0].received_qty = received
+			receipt.items[0].stock_qty = received
+			receipt.insert()
+			receipt.submit()
+
+		self.assertEqual(get_on_time_shipments(scorecard_for(supplier)), 1)
+
 
 def create_scorecard_supplier(supplier_name="_Test Supplier Scorecard"):
 	if not frappe.db.exists("Supplier", supplier_name):

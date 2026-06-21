@@ -35,6 +35,21 @@ class TestSupplierScorecard(ERPNextTestSuite):
 		doc.standings[3].max_grade = 90
 		self.assertRaises(frappe.ValidationError, doc.validate_standings)
 
+	def test_inverted_standing_band_rejected(self):
+		doc = make_supplier_scorecard()
+		doc.standings = []
+		doc.append("standings", {"standing_name": "Inverted", "min_grade": 60, "max_grade": 40})
+		self.assertRaises(frappe.ValidationError, doc.validate_standings)
+
+	def test_perfect_score_maps_to_top_standing(self):
+		# A perfect score (the upper bound of the top band) must still resolve to a standing
+		supplier = create_test_supplier("_Test Supplier SC Perfect")
+		doc = make_supplier_scorecard()
+		doc.supplier = supplier
+		doc.supplier_score = 100
+		doc.update_standing()
+		self.assertEqual(doc.status, "Excellent")
+
 	def test_total_score_defaults_to_100_without_periods(self):
 		doc = make_supplier_scorecard()
 		doc.name = "_Test Scorecard Without Periods"
