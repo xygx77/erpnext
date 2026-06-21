@@ -516,8 +516,9 @@ def get_vendor_invoice_query(filters):
 			& (doctype.update_stock == 0)
 			& (doctype.company == filters.get("company"))
 			& (item.is_stock_item == 0)
+			# WHERE not HAVING: no GROUP BY here, and Postgres rejects HAVING on a SELECT alias
+			& ((doctype.base_total - doctype.claimed_landed_cost_amount) > 0)
 		)
-		.having(frappe.qb.Field("unclaimed_amount") > 0)
 	)
 
 	if filters.get("name"):
