@@ -8,9 +8,9 @@ from erpnext.tests.utils import ERPNextTestSuite
 
 class TestWorkOrderStockReport(ERPNextTestSuite):
 	def test_report_executes_and_lists_work_order(self):
-		# get_item_list computes build_qty by multiplying bin/bom/bom_item columns that are not
-		# functionally dependent on the grouped item_code; they must be in the GROUP BY for the
-		# report to run on Postgres. This exercises that query on both engines.
+		# get_item_list aggregates build_qty with Max() and groups by item_code, so it returns one
+		# row per item_code and runs on Postgres (which rejects non-grouped selected columns).
+		# This exercises that query on both engines.
 		from erpnext.manufacturing.doctype.work_order.test_work_order import make_wo_order_test_record
 		from erpnext.manufacturing.report.work_order_stock_report.work_order_stock_report import execute
 
