@@ -19,8 +19,10 @@ class TestBin(ERPNextTestSuite):
 		bin1.insert()
 
 		bin2 = frappe.get_doc(doctype="Bin", item_code=item_code, warehouse=warehouse)
+		frappe.db.savepoint("dup_bin")
 		with self.assertRaises(frappe.UniqueValidationError):
 			bin2.insert()
+		frappe.db.rollback(save_point="dup_bin")  # preserve transaction in postgres
 
 		# util method should handle it
 		bin = _create_bin(item_code, warehouse)
