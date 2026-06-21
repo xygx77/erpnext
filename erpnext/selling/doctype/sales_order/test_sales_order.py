@@ -3044,6 +3044,25 @@ class TestSalesOrder(ERPNextTestSuite):
 		finally:
 			frappe.db.set_value("Item", "_Test Item", "grant_commission", 1)
 
+	def test_commission_fields_not_copied_on_duplicate(self):
+		"""Commission rate/amount fields are no_copy; only the sales partner carries to a copy."""
+		frappe.db.set_value("Item", "_Test Item", "grant_commission", 1)
+		try:
+			so = make_sales_order(qty=10, rate=100, do_not_save=True)
+			so.sales_partner = "_Test Sales Partner India - 1"
+			so.commission_rate = 7
+			so.save()
+			self.assertEqual(so.total_commission, 70)
+
+			# ignore_no_copy=False mirrors UI "Duplicate"/amend, which honour no_copy
+			duplicate = frappe.copy_doc(so, ignore_no_copy=False)
+			self.assertEqual(duplicate.sales_partner, "_Test Sales Partner India - 1")
+			self.assertFalse(duplicate.commission_rate)
+			self.assertFalse(duplicate.total_commission)
+			self.assertFalse(duplicate.amount_eligible_for_commission)
+		finally:
+			frappe.db.set_value("Item", "_Test Item", "grant_commission", 1)
+
 
 def compare_payment_schedules(doc, doc1, doc2):
 	for index, schedule in enumerate(doc1.get("payment_schedule")):
