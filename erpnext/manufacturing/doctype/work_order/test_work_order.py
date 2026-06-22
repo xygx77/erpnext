@@ -1048,7 +1048,7 @@ class TestWorkOrder(ERPNextTestSuite):
 		job_cards = frappe.get_all(
 			"Job Card Time Log",
 			fields=["parent as name", "docstatus"],
-			order_by="creation asc",
+			order_by="creation asc",  # pg-ok: dropped under distinct on PG — set is just iterated to cancel, order irrelevant
 			distinct=True,
 		)
 

@@ -1725,7 +1725,7 @@ def get_operations(doctype: str, txt: str, searchfield: str, start: int, page_le
 		fields=["operation"],
 		limit_start=start,
 		limit_page_length=page_len,
-		order_by="idx asc",
+		order_by="idx asc",  # pg-ok: dropped under distinct on PG — paging order of an operation autocomplete only
 		as_list=1,
 		distinct=True,
 	)

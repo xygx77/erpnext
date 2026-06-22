@@ -71,6 +71,11 @@ MYSQL_RESULT_KEYS = {"Column_name", "Key_name", "Seq_in_index", "Non_unique", "I
 
 SET_BOOL_FUNCS = {"set_value", "db_set"}
 
+# frappe.get_all / get_list: frappe's db_query SILENTLY drops ORDER BY for `distinct` queries on
+# Postgres (the ORDER BY column must appear in the SELECT-DISTINCT list), so `distinct=True` together
+# with a literal `order_by` is a no-op on PG and the result comes back unordered.
+DISTINCT_ORDER_FUNCS = {"get_all", "get_list"}
+
 
 def _docstring_ids(tree: ast.AST) -> set[int]:
 	"""ids of Constant nodes that are docstrings (so prose describing the rules isn't flagged)."""
@@ -153,6 +158,25 @@ class Visitor(ast.NodeVisitor):
 				a = node.args[value_idx]
 				if isinstance(a, ast.Constant) and isinstance(a.value, bool):
 					self._flag(node, f"{name}(..., {a.value}) sets an int/Check column with a bool -> pass 1/0 (Postgres rejects bool->smallint)")
+
+		# frappe.get_all/get_list(..., distinct=True, order_by="<col>") -> ORDER BY is silently dropped
+		# for distinct queries on Postgres, so the result is unordered there. Sort in python instead
+		# (e.g. sorted(frappe.get_all(..., distinct=True), key=str.casefold)). An empty order_by="" (the
+		# explicit "suppress the injected default" idiom) and a dynamic/variable order_by are not flagged.
+		if name in DISTINCT_ORDER_FUNCS:
+			has_distinct = any(
+				kw.arg == "distinct" and isinstance(kw.value, ast.Constant) and kw.value.value
+				for kw in node.keywords
+			)
+			order_kw = next((kw for kw in node.keywords if kw.arg == "order_by"), None)
+			has_literal_order = (
+				order_kw is not None
+				and isinstance(order_kw.value, ast.Constant)
+				and isinstance(order_kw.value.value, str)
+				and order_kw.value.value.strip()
+			)
+			if has_distinct and has_literal_order:
+				self._flag(node, f"{name}(distinct=True, order_by=...) -> frappe drops ORDER BY for distinct queries on Postgres; sort in python instead, e.g. sorted(..., key=str.casefold)")
 
 		self.generic_visit(node)
 
