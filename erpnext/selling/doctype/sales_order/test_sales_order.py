@@ -3061,7 +3061,7 @@ class TestSalesOrder(ERPNextTestSuite):
 			self.assertFalse(duplicate.total_commission)
 			self.assertFalse(duplicate.amount_eligible_for_commission)
 		finally:
-			frappe.db.set_value("Item", "_Test Item", "grant_commission", 1)
+			frappe.db.set_value("Item", "_Test Item", "grant_commission", 0)
 
 
 def compare_payment_schedules(doc, doc1, doc2):
