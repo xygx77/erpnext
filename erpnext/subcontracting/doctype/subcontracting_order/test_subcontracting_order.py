@@ -112,6 +112,32 @@ class TestSubcontractingOrder(ERPNextTestSuite):
 		sco.load_from_db()
 		self.assertEqual(sco.status, "Partially Received")
 
+	def test_sco_requires_a_subcontracting_purchase_order(self):
+		sco = get_subcontracting_order(do_not_save=1)
+		sco.purchase_order = None
+		self.assertRaises(frappe.ValidationError, sco.validate_purchase_order_for_subcontracting)
+
+	def test_service_item_must_be_non_stock(self):
+		sco = get_subcontracting_order()
+		sco.service_items[0].item_code = "_Test Item"  # a stock item
+		self.assertRaises(frappe.ValidationError, sco.validate_service_items)
+
+	def test_reserve_warehouse_must_differ_from_supplier_warehouse(self):
+		sco = get_subcontracting_order()
+		sco.supplied_items[0].reserve_warehouse = sco.supplier_warehouse
+		self.assertRaises(frappe.ValidationError, sco.validate_supplied_items)
+
+	def test_subcontracting_receipt_applies_bom_process_loss(self):
+		sco = get_subcontracting_order()
+		frappe.db.set_value("BOM", sco.items[0].bom, "process_loss_percentage", 10)
+
+		scr = make_subcontracting_receipt(sco.name)
+
+		# 10% of the ordered 10 qty is lost in processing
+		self.assertEqual(scr.items[0].received_qty, 10)
+		self.assertEqual(scr.items[0].process_loss_qty, 1)
+		self.assertEqual(scr.items[0].qty, 9)
+
 	def test_make_rm_stock_entry(self):
 		sco = get_subcontracting_order()
 		rm_items = get_rm_items(sco.supplied_items)
