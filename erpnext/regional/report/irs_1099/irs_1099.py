@@ -131,6 +131,7 @@ def get_payer_address_html(company):
 		.where(address.is_your_company_address == 1)
 		.orderby(Case().when(address.address_type == "Postal", 1).else_(0), order=frappe.qb.desc)
 		.orderby(Case().when(address.address_type == "Billing", 1).else_(0), order=frappe.qb.desc)
+		.orderby(address.name)  # deterministic LIMIT-1 tie-break across engines
 		.limit(1)
 		.run(as_dict=True)
 	)
