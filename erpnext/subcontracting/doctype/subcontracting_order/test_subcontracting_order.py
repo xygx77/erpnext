@@ -138,6 +138,38 @@ class TestSubcontractingOrder(ERPNextTestSuite):
 		self.assertEqual(scr.items[0].process_loss_qty, 1)
 		self.assertEqual(scr.items[0].qty, 9)
 
+	def test_service_cost_is_matched_by_purchase_order_item(self):
+		service_items = [
+			{
+				"warehouse": "_Test Warehouse - _TC",
+				"item_code": "Subcontracted Service Item 7",
+				"qty": 10,
+				"rate": 100,
+				"fg_item": "Subcontracted Item SA7",
+				"fg_item_qty": 10,
+			},
+			{
+				"warehouse": "_Test Warehouse - _TC",
+				"item_code": "Subcontracted Service Item 1",
+				"qty": 10,
+				"rate": 200,
+				"fg_item": "Subcontracted Item SA1",
+				"fg_item_qty": 10,
+			},
+		]
+		sco = get_subcontracting_order(service_items=service_items)
+		expected = {item.purchase_order_item: item.service_cost_per_qty for item in sco.items}
+
+		# The two finished goods have distinct service costs, so a position-based pairing would swap them
+		self.assertEqual(len(set(expected.values())), 2)
+
+		# Service costs must follow purchase_order_item, not list position
+		sco.service_items.reverse()
+		sco.calculate_service_costs()
+
+		for item in sco.items:
+			self.assertEqual(item.service_cost_per_qty, expected[item.purchase_order_item])
+
 	def test_make_rm_stock_entry(self):
 		sco = get_subcontracting_order()
 		rm_items = get_rm_items(sco.supplied_items)
