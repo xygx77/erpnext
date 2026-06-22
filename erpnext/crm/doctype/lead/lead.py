@@ -140,7 +140,7 @@ class Lead(SellingController, CRMNote):
 				frappe.throw(_("A Lead requires either a person's name or an organization's name"))
 			elif self.company_name:
 				self.lead_name = self.company_name
-			else:
+			elif self.email_id:
 				self.lead_name = self.email_id.split("@")[0]
 
 	def set_title(self):
