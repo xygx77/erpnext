@@ -14,13 +14,30 @@ def execute():
 		if not frappe.db.has_column(doctype, "commission_rate"):
 			continue
 
-		# Percent maps to a NOT NULL decimal column, so empty/NULL/non-numeric text must become 0
-		# as well, otherwise the column type change fails under strict SQL mode.
+		# Only rewrite the rows the column change can't cast as-is. Plain numeric strings (the vast
+		# majority, e.g. "20") are left untouched so this stays a targeted cleanup instead of a
+		# full-table rewrite; NULL / empty / non-numeric / percent-sign values become a clean number,
+		# otherwise the Data -> Percent change fails under strict SQL mode (Percent is NOT NULL decimal).
 		rows = frappe.db.get_all(doctype, fields=["name", "commission_rate"])
 		for row in rows:
+			if _is_plain_number(row.commission_rate):
+				continue
 			cleaned = flt(_strip_percent_sign(row.commission_rate))
-			if str(row.commission_rate) != str(cleaned):
-				frappe.db.set_value(doctype, row.name, "commission_rate", cleaned, update_modified=False)
+			frappe.db.set_value(doctype, row.name, "commission_rate", cleaned, update_modified=False)
+
+
+def _is_plain_number(value) -> bool:
+	"""True if the stored value is already a clean numeric string the column change can cast."""
+	if value is None:
+		return False
+	text = str(value)
+	if text != text.strip() or "%" in text:
+		return False
+	try:
+		float(text)
+	except ValueError:
+		return False
+	return True
 
 
 def _strip_percent_sign(value):
