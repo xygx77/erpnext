@@ -162,6 +162,23 @@ class SubcontractingInwardController:
 		customer_warehouse = frappe.get_cached_value(
 			"Subcontracting Inward Order", self.subcontracting_inward_order, "customer_warehouse"
 		)
+		work_order_items = frappe.get_all(
+			"Work Order Item",
+			{"parent": self.work_order, "docstatus": 1, "is_customer_provided_item": 1},
+			["item_code", "transferred_qty", "required_qty", "stock_reserved_qty"],
+		)
+		wo_item_dict = frappe._dict(
+			{
+				wo_item.item_code: frappe._dict(
+					{
+						"transferred_qty": wo_item.transferred_qty,
+						"required_qty": wo_item.required_qty,
+						"stock_reserved_qty": wo_item.stock_reserved_qty,
+					}
+				)
+				for wo_item in work_order_items
+			}
+		)
 		item_codes = []
 		for item in self.items:
 			if not frappe.get_cached_value("Item", item.item_code, "is_customer_provided_item"):
@@ -184,23 +201,6 @@ class SubcontractingInwardController:
 					)
 				)
 			else:
-				work_order_items = frappe.get_all(
-					"Work Order Item",
-					{"parent": self.work_order, "docstatus": 1, "is_customer_provided_item": 1},
-					["item_code", "transferred_qty", "required_qty", "stock_reserved_qty"],
-				)
-				wo_item_dict = frappe._dict(
-					{
-						wo_item.item_code: frappe._dict(
-							{
-								"transferred_qty": wo_item.transferred_qty,
-								"required_qty": wo_item.required_qty,
-								"stock_reserved_qty": wo_item.stock_reserved_qty,
-							}
-						)
-						for wo_item in work_order_items
-					}
-				)
 				if wo_item := wo_item_dict.get(item.item_code):
 					if wo_item.transferred_qty + item.transfer_qty > max(
 						wo_item.required_qty, wo_item.stock_reserved_qty
