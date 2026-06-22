@@ -1163,7 +1163,7 @@ def get_fg_reference_names(
 		"Subcontracting Inward Order Item",
 		limit_start=start,
 		limit_page_length=page_len,
-		filters={"parent": filters.get("parent"), "item_code": ("like", "%%%s%%" % txt), "docstatus": 1},
+		filters={"parent": filters.get("parent"), "item_code": ("like", f"%{txt}%"), "docstatus": 1},
 		fields=["name", "item_code", "delivery_warehouse"],
 		as_list=True,
 		order_by="idx",
