@@ -128,15 +128,17 @@ class Customer(TransactionBase):
 			Customer = frappe.qb.DocType("Customer")
 
 			if frappe.db.db_type == "postgres":
-				# Postgres: extract the TRAILING digits (e.g. "Customer - 3" -> "3") and cast to int.
-				# A non-numeric trailing token (e.g. "Customer - Foo") strips to an empty string, which
-				# NULLIF turns into NULL: MAX() then skips it and COALESCE floors to 0, matching
-				# MariaDB's CAST(... AS UNSIGNED) -> 0. (pypika's Substring is start/length, not a
-				# regex, so it can't be used here; UNSIGNED also doesn't exist on postgres, and a raw
-				# CAST of a non-numeric token to INTEGER would raise instead of yielding NULL.)
+				# Mirror MariaDB's CAST(SUBSTRING_INDEX(name, ' ', -1) AS UNSIGNED): take the last
+				# whitespace-delimited token, then its LEADING digits, and cast to int. So "X - 3" -> 3,
+				# "X - 3a" -> 3, "X - 1.5" -> 1, matching MariaDB exactly. A non-numeric token (e.g.
+				# "X - Foo") strips to '' which NULLIF turns into NULL: MAX() skips it and COALESCE floors
+				# to 0, matching MariaDB's CAST(... AS UNSIGNED) -> 0. (pypika's Substring is start/length,
+				# not a regex; UNSIGNED doesn't exist on postgres, and a raw CAST of a non-numeric token to
+				# INTEGER would raise instead of yielding NULL.)
 				regexp_replace = CustomFunction("regexp_replace", ["source", "pattern", "replacement"])
 				nullif = CustomFunction("NULLIF", ["expr", "value"])
-				extracted_part = nullif(regexp_replace(Customer.name, r"^.*?(\d*)$", r"\1"), "")
+				last_token = regexp_replace(Customer.name, r"^.*\s", "")
+				extracted_part = nullif(regexp_replace(last_token, r"^(\d*).*$", r"\1"), "")
 				casted_part = Cast(extracted_part, "INTEGER")
 			else:
 				# MariaDB/MySQL: keep existing behavior.
