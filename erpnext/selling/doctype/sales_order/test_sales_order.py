@@ -3061,7 +3061,7 @@ class TestSalesOrder(ERPNextTestSuite):
 			self.assertFalse(duplicate.total_commission)
 			self.assertFalse(duplicate.amount_eligible_for_commission)
 		finally:
-			frappe.db.set_value("Item", "_Test Item", "grant_commission", 0)
+			frappe.db.set_value("Item", "_Test Item", "grant_commission", 1)
 
 	def test_commission_rate_carried_through_mapper(self):
 		"""commission_rate is no_copy, but Make Delivery Note / Sales Invoice still carries it."""
