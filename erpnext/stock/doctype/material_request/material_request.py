@@ -12,7 +12,7 @@ import frappe.defaults
 from frappe import _, msgprint
 from frappe.model.document import Document
 from frappe.query_builder import Order
-from frappe.query_builder.functions import Sum
+from frappe.query_builder.functions import Min, Sum
 from frappe.utils import cint, flt, get_datetime, get_link_to_form, getdate, new_line_sep, nowdate
 
 from erpnext.buying.utils import check_on_hold_or_closed_status, validate_for_items
@@ -483,9 +483,7 @@ def get_material_requests_based_on_supplier(
 	query = (
 		frappe.qb.from_(mr)
 		.from_(mr_item)
-		.select(mr.name)
-		.distinct()
-		.select(mr.transaction_date, mr.company)
+		.select(mr.name, mr.transaction_date, mr.company)
 		.where(
 			(mr.name == mr_item.parent)
 			& (mr_item.item_code.isin(supplier_items))
@@ -495,7 +493,8 @@ def get_material_requests_based_on_supplier(
 			& (mr.status != "Stopped")
 			& (mr.company == filters.get("company"))
 		)
-		.orderby(mr_item.item_code, order=Order.asc)
+		.groupby(mr.name, mr.transaction_date, mr.company)
+		.orderby(Min(mr_item.item_code), order=Order.asc)
 		.limit(cint(page_len))
 		.offset(cint(start))
 	)

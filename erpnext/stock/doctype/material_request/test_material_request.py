@@ -1252,6 +1252,44 @@ class TestMaterialRequest(ERPNextTestSuite):
 		over.items[0].qty = 4
 		over.validate_qty_against_so()
 
+	def test_get_material_requests_based_on_supplier(self):
+		"""The supplier-based Material Request picker must run on every engine.
+
+		It deduplicated requests with SELECT DISTINCT while ordering by an item
+		column that is not in the select list; PostgreSQL rejects that, so the
+		picker has to group and order by an aggregate instead.
+		"""
+		from erpnext.stock.doctype.material_request.material_request import (
+			get_material_requests_based_on_supplier,
+		)
+
+		item = create_item("_Test MR Default Supplier Item")
+		item.set("item_defaults", [])
+		item.append(
+			"item_defaults",
+			{
+				"company": "_Test Company",
+				"default_warehouse": "_Test Warehouse - _TC",
+				"default_supplier": "_Test Supplier",
+			},
+		)
+		item.save()
+
+		mr1 = make_material_request(item_code=item.name, qty=5)
+		mr2 = make_material_request(item_code=item.name, qty=7)
+
+		result = get_material_requests_based_on_supplier(
+			doctype="Material Request",
+			txt="",
+			searchfield="name",
+			start=0,
+			page_len=20,
+			filters={"supplier": "_Test Supplier", "company": "_Test Company"},
+		)
+		returned = {row["name"] for row in result}
+		self.assertIn(mr1.name, returned)
+		self.assertIn(mr2.name, returned)
+
 
 def get_in_transit_warehouse(company):
 	if not frappe.db.exists("Warehouse Type", "Transit"):
