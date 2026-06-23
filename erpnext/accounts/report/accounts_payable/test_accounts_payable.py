@@ -95,6 +95,43 @@ class TestAccountsPayable(ERPNextTestSuite, AccountsTestMixin):
 		self.assertEqual(row.paid, 120)
 		self.assertEqual(row.outstanding, 180)
 
+	def test_show_remarks_includes_invoice_remark(self):
+		pi = self.create_purchase_invoice(do_not_submit=True)
+		pi.remarks = "AP test remark"
+		pi.save().submit()
+
+		filters = {
+			"company": self.company,
+			"party_type": "Supplier",
+			"party": [self.supplier],
+			"report_date": today(),
+			"range": "30, 60, 90, 120",
+			"show_remarks": 1,
+		}
+		row = next(row for row in execute(filters)[1] if row.voucher_no == pi.name)
+		self.assertIn("AP test remark", row.remarks or "")
+
+	def test_group_by_supplier_totals(self):
+		self.create_purchase_invoice()  # outstanding 300
+
+		filters = {
+			"company": self.company,
+			"party_type": "Supplier",
+			"party": [self.supplier],
+			"report_date": today(),
+			"range": "30, 60, 90, 120",
+			"group_by_party": True,
+		}
+		report = execute(filters)[1]
+
+		# a per-supplier subtotal row plus a grand total row
+		party_subtotal = next(
+			row for row in report if row.get("party") == self.supplier and not row.get("voucher_no")
+		)
+		grand_total = next(row for row in report if row.get("party") == "Total")
+		self.assertEqual(party_subtotal.get("invoiced"), 300)
+		self.assertEqual(grand_total.get("outstanding"), 300)
+
 	def test_payment_terms_template_filters(self):
 		from erpnext.controllers.accounts_controller import get_payment_terms
 
