@@ -591,7 +591,7 @@ def get_batches_from_stock_ledger_entries(searchfields, txt, filters, start=0, p
 			& (batch_table.disabled == 0)
 			& (stock_ledger_entry.batch_no.isnotnull())
 		)
-		.groupby(stock_ledger_entry.batch_no, stock_ledger_entry.warehouse)
+		.groupby(stock_ledger_entry.batch_no, stock_ledger_entry.warehouse, batch_table.name)
 		.having(Sum(stock_ledger_entry.actual_qty) != 0)
 		.offset(start)
 		.limit(page_len)
@@ -608,8 +608,12 @@ def get_batches_from_stock_ledger_entries(searchfields, txt, filters, start=0, p
 		query = query.where((batch_table.expiry_date >= expiry_date) | (batch_table.expiry_date.isnull()))
 
 	query = query.select(
-		Concat("MFG-", batch_table.manufacturing_date).as_("manufacturing_date"),
-		Concat("EXP-", batch_table.expiry_date).as_("expiry_date"),
+		Case()
+		.when(batch_table.manufacturing_date.isnotnull(), Concat("MFG-", batch_table.manufacturing_date))
+		.as_("manufacturing_date"),
+		Case()
+		.when(batch_table.expiry_date.isnotnull(), Concat("EXP-", batch_table.expiry_date))
+		.as_("expiry_date"),
 	)
 
 	if filters.get("warehouse"):
@@ -651,7 +655,7 @@ def get_batches_from_serial_and_batch_bundle(searchfields, txt, filters, start=0
 			& (batch_table.disabled == 0)
 			& (stock_ledger_entry.serial_and_batch_bundle.isnotnull())
 		)
-		.groupby(bundle.batch_no, bundle.warehouse)
+		.groupby(bundle.batch_no, bundle.warehouse, batch_table.name)
 		.having(Sum(bundle.qty) != 0)
 		.offset(start)
 		.limit(page_len)
@@ -670,8 +674,12 @@ def get_batches_from_serial_and_batch_bundle(searchfields, txt, filters, start=0
 		)
 
 	bundle_query = bundle_query.select(
-		Concat("MFG-", batch_table.manufacturing_date),
-		Concat("EXP-", batch_table.expiry_date),
+		Case()
+		.when(batch_table.manufacturing_date.isnotnull(), Concat("MFG-", batch_table.manufacturing_date))
+		.as_("manufacturing_date"),
+		Case()
+		.when(batch_table.expiry_date.isnotnull(), Concat("EXP-", batch_table.expiry_date))
+		.as_("expiry_date"),
 	)
 
 	if filters.get("warehouse"):
