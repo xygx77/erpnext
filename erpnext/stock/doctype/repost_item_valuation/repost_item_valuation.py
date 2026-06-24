@@ -364,8 +364,8 @@ class RepostItemValuation(Document):
 
 
 @frappe.whitelist()
-def bulk_restart_reposting(names: str):
-	names = json.loads(names)
+def bulk_restart_reposting(names: str | list):
+	names = frappe.parse_json(names)
 	for name in names:
 		doc = frappe.get_doc("Repost Item Valuation", name)
 		if doc.status != "Failed":
