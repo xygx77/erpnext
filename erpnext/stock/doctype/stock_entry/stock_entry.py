@@ -1683,8 +1683,7 @@ def get_uom_details(item_code: str, uom: str, qty: float | None):
 
 @frappe.whitelist()
 def get_warehouse_details(args: str | dict):
-	if isinstance(args, str):
-		args = json.loads(args)
+	args = frappe.parse_json(args)
 
 	args = frappe._dict(args)
 
