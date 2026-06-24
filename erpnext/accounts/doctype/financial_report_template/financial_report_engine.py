@@ -1032,8 +1032,7 @@ class FormulaFieldUpdater:
 def get_filtered_accounts(company: str, account_rows: str | list):
 	frappe.has_permission("Financial Report Template", ptype="read", throw=True)
 
-	if isinstance(account_rows, str):
-		account_rows = json.loads(account_rows, object_hook=frappe._dict)
+	account_rows = [frappe._dict(row) for row in frappe.parse_json(account_rows)]
 
 	return DataCollector.get_filtered_accounts(company, account_rows)
 
