@@ -342,7 +342,7 @@ class calculate_taxes_and_totals:
 				self._set_in_company_currency(item, ["net_rate", "net_amount"])
 
 	def _load_item_tax_rate(self, item_tax_rate):
-		return json.loads(item_tax_rate) if item_tax_rate else {}
+		return frappe.parse_json(item_tax_rate) if item_tax_rate else {}
 
 	def get_current_tax_fraction(self, tax, item_tax_map):
 		"""
