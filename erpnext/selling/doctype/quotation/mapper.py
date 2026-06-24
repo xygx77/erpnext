@@ -31,8 +31,7 @@ def make_sales_order(
 def _make_sales_order(source_name, target_doc=None, ignore_permissions=False, args=None):
 	if args is None:
 		args = {}
-	if isinstance(args, str):
-		args = json.loads(args)
+	args = frappe.parse_json(args)
 
 	customer = _make_customer(source_name, ignore_permissions)
 	ordered_items = get_ordered_items(source_name)
@@ -151,8 +150,7 @@ def make_sales_invoice(
 def _make_sales_invoice(source_name, target_doc=None, ignore_permissions=False, args=None):
 	if args is None:
 		args = {}
-	if isinstance(args, str):
-		args = json.loads(args)
+	args = frappe.parse_json(args)
 
 	customer = _make_customer(source_name, ignore_permissions)
 
