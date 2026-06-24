@@ -629,11 +629,11 @@ def allow_to_make_project_update(project, time, frequency):
 
 
 @frappe.whitelist()
-def create_duplicate_project(prev_doc: str, project_name: str):
+def create_duplicate_project(prev_doc: str | dict, project_name: str):
 	"""Create duplicate project based on the old project"""
 	import json
 
-	prev_doc = json.loads(prev_doc)
+	prev_doc = frappe.parse_json(prev_doc)
 
 	if project_name == prev_doc.get("name"):
 		frappe.throw(_("Use a name that is different from previous project name"))
