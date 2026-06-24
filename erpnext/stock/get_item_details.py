@@ -90,8 +90,7 @@ def get_item_details(
 	item = frappe.get_cached_doc("Item", ctx.item_code)
 	validate_item_details(ctx, item)
 
-	if isinstance(doc, str):
-		doc = json.loads(doc)
+	doc = frappe.parse_json(doc)
 
 	if doc:
 		ctx.transaction_date = doc.get("transaction_date") or doc.get("posting_date")
