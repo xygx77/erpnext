@@ -636,7 +636,7 @@ def remove_free_item(doc):
 def get_applied_pricing_rules(pricing_rules):
 	if pricing_rules:
 		if pricing_rules.startswith("["):
-			return json.loads(pricing_rules)
+			return frappe.parse_json(pricing_rules)
 		else:
 			return pricing_rules.split(",")
 
