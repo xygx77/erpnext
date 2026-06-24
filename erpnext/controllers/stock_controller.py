@@ -625,8 +625,7 @@ def repost_required_for_queue(doc: StockController) -> bool:
 def check_item_quality_inspection(doctype: str, docstatus: str | int, items: str | list[dict]):
 	from erpnext.stock.services.quality_inspection_service import INSPECTION_FIELDNAME_MAP
 
-	if isinstance(items, str):
-		items = json.loads(items)
+	items = frappe.parse_json(items)
 
 	inspection_fieldname = INSPECTION_FIELDNAME_MAP.get(doctype)
 	if inspection_fieldname is None:
@@ -658,8 +657,7 @@ def check_item_quality_inspection(doctype: str, docstatus: str | int, items: str
 def make_quality_inspections(
 	company: str, doctype: str, docname: str, items: str | list, inspection_type: str
 ):
-	if isinstance(items, str):
-		items = json.loads(items)
+	items = frappe.parse_json(items)
 
 	inspections = []
 	for item in items:
