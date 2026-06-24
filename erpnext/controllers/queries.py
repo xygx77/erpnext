@@ -213,8 +213,7 @@ def item_query(
 	"""
 	doctype = "Item"
 
-	if isinstance(filters, str):
-		filters = json.loads(filters)
+	filters = frappe.parse_json(filters)
 
 	if filters and isinstance(filters, dict):
 		if filters.get("customer") or filters.get("supplier"):
