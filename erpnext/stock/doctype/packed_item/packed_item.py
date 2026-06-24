@@ -432,7 +432,7 @@ def on_doctype_update():
 
 
 @frappe.whitelist()
-def get_items_from_product_bundle(row: str):
+def get_items_from_product_bundle(row: str | dict):
 	"""Item details for each component of a Product Bundle.
 
 	``row.product_bundle`` selects a specific version by document name (the buying
@@ -441,7 +441,7 @@ def get_items_from_product_bundle(row: str):
 	"""
 	from erpnext.selling.doctype.product_bundle.product_bundle import get_active_product_bundle
 
-	row, items = ItemDetailsCtx(json.loads(row)), []
+	row, items = ItemDetailsCtx(frappe.parse_json(row)), []
 
 	if bundle_name := row.get("product_bundle"):
 		frappe.has_permission("Product Bundle", "read", bundle_name, throw=True)
