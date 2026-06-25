@@ -187,7 +187,7 @@ class Workstation(Document):
 
 			if existing:
 				frappe.throw(
-					_("Row #{0}: Timings conflicts with row {1}").format(d.idx, comma_and(existing)),
+					_("Row #{0}: Timings conflict with row {1}").format(d.idx, comma_and(existing)),
 					OverlapError,
 				)
 
@@ -451,7 +451,7 @@ def is_within_operating_hours(workstation, operation, from_datetime, to_datetime
 
 	frappe.throw(
 		_(
-			"Operation {0} longer than any available working hours in workstation {1}, break down the operation into multiple operations"
+			"Operation {0} is longer than any available working hours in workstation {1}, break down the operation into multiple operations"
 		).format(operation, workstation.name),
 		NotInWorkingHoursError,
 	)
@@ -592,7 +592,7 @@ def validate_job_card(job_card: str, status: str):
 			)
 		else:
 			frappe.throw(
-				_("The job card {0} is in {1} state and you cannot complete.").format(
+				_("The job card {0} is in {1} state and you cannot complete it.").format(
 					job_card, current_status
 				)
 			)
