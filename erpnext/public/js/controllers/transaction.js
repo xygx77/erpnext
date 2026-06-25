@@ -2635,11 +2635,9 @@ erpnext.TransactionController = class TransactionController extends erpnext.taxe
 			) {
 				if (!me.frm.doc[fieldname]) {
 					frappe.msgprint(
-						__("Please specify") +
-							": " +
-							__(frappe.meta.get_label(me.frm.doc.doctype, fieldname, me.frm.doc.name)) +
-							". " +
-							__("It is needed to fetch Item Details.")
+						__("Please specify {0}. It is needed to fetch Item Details.", [
+							__(frappe.meta.get_label(me.frm.doc.doctype, fieldname, me.frm.doc.name)),
+						])
 					);
 					valid = false;
 				}
