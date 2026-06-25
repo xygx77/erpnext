@@ -646,7 +646,7 @@ class TransactionDeletionRecord(Document):
 	def validate_doc_status(self):
 		if self.status != "Running":
 			frappe.throw(
-				_("{0} is not running. Cannot trigger events for this Document").format(
+				_("{0} is not running. Cannot trigger events for this document").format(
 					get_link_to_form("Transaction Deletion Record", self.name)
 				)
 			)
