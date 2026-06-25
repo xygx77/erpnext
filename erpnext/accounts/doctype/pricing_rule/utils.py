@@ -152,7 +152,7 @@ def _get_pricing_rules(apply_on, args, values):
 			and {child_doc}.parent = `tabPricing Rule`.name
 			and `tabPricing Rule`.disable = 0 and
 			`tabPricing Rule`.{transaction_type} = 1 {warehouse_cond} {conditions}
-		order by `tabPricing Rule`.priority desc,
+		order by coalesce(`tabPricing Rule`.priority, '') desc,
 			`tabPricing Rule`.name desc""".format(
 				child_doc=child_doc,
 				apply_on_field=apply_on_field,
