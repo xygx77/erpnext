@@ -73,7 +73,7 @@ class ExchangeRateRevaluation(Document):
 
 	def validate_mandatory(self):
 		if not (self.company and self.posting_date):
-			frappe.throw(_("Please select Company and Posting Date to getting entries"))
+			frappe.throw(_("Please select Company and Posting Date to get entries"))
 
 	def before_submit(self):
 		self.remove_accounts_without_gain_loss()
