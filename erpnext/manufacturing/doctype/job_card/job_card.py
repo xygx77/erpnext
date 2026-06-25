@@ -187,7 +187,7 @@ class JobCard(Document):
 		if self.items and not self.transferred_qty and not self.skip_material_transfer:
 			frappe.throw(
 				_(
-					"Materials needs to be transferred to the work in progress warehouse for the job card {0}"
+					"Materials need to be transferred to the work in progress warehouse for the job card {0}"
 				).format(self.name)
 			)
 
@@ -352,7 +352,7 @@ class JobCard(Document):
 		data = self.get_overlap_for(d, open_job_cards=open_job_cards)
 		if data:
 			frappe.throw(
-				_("Row {0}: From Time and To Time of {1} is overlapping with {2}").format(
+				_("Row {0}: From Time and To Time of {1} are overlapping with {2}").format(
 					d.idx, self.name, data.name
 				),
 				OverlapError,
@@ -901,7 +901,7 @@ class JobCard(Document):
 		):
 			frappe.throw(
 				_(
-					"Materials needs to be transferred to the work in progress warehouse for the job card {0}"
+					"Materials need to be transferred to the work in progress warehouse for the job card {0}"
 				).format(self.name)
 			)
 
@@ -1411,14 +1411,15 @@ class JobCard(Document):
 		return current_operation_qty + flt(self.total_completed_qty)
 
 	def validate_previous_operation(self, row, current_operation_qty):
-		message = "Job Card {}: As per the sequence of the operations in the work order {}".format(
-			bold(self.name), bold(get_link_to_form("Work Order", self.work_order))
-		)
-
 		if not row.completed_qty or (row.status != "Completed" and row.completed_qty < current_operation_qty):
 			frappe.throw(
-				_("{0}, complete the operation {1} before the operation {2}.").format(
-					message, bold(row.operation), bold(self.operation)
+				_(
+					"Job Card {0}: As per the sequence of the operations in the work order {1}, complete the operation {2} before the operation {3}."
+				).format(
+					bold(self.name),
+					bold(get_link_to_form("Work Order", self.work_order)),
+					bold(row.operation),
+					bold(self.operation),
 				),
 				OperationSequenceError,
 			)
@@ -1437,7 +1438,7 @@ class JobCard(Document):
 
 	def validate_work_order(self):
 		if self.is_work_order_closed():
-			frappe.throw(_("You can't make any changes to Job Card since Work Order is closed."))
+			frappe.throw(_("You cannot make any changes to Job Card since Work Order is closed."))
 
 	def set_employees(self):
 		self.employee = []
@@ -1635,7 +1636,9 @@ class JobCard(Document):
 			ste.stock_entry.save()
 
 		frappe.msgprint(
-			_("Stock Entry {0} has created").format(get_link_to_form("Stock Entry", ste.stock_entry.name))
+			_("Stock Entry {0} has been created").format(
+				get_link_to_form("Stock Entry", ste.stock_entry.name)
+			)
 		)
 
 		return ste.stock_entry.as_dict()

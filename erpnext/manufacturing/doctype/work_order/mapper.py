@@ -376,7 +376,7 @@ def validate_operation_data(row):
 
 	if flt(row.get("qty")) > flt(row.get("pending_qty")):
 		frappe.throw(
-			_("For operation {0}: Quantity ({1}) can not be greater than pending quantity({2})").format(
+			_("For operation {0}: Quantity ({1}) can not be greater than pending quantity ({2})").format(
 				frappe.bold(row.get("operation")),
 				frappe.bold(row.get("qty")),
 				frappe.bold(row.get("pending_qty")),
