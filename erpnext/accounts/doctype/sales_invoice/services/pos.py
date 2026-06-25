@@ -187,7 +187,7 @@ class POSService:
 			total_amount_in_payments = sum(payment.amount for payment in doc.payments)
 			invoice_total = doc.rounded_total or doc.grand_total
 			if total_amount_in_payments < invoice_total:
-				frappe.throw(_("Total payments amount can't be greater than {}").format(-invoice_total))
+				frappe.throw(_("Total payments amount can't be greater than {0}").format(-invoice_total))
 
 	def validate_pos_paid_amount(self) -> None:
 		doc = self.doc
@@ -273,7 +273,7 @@ class POSService:
 				pluck="pos_closing_entry",
 			)
 			if pos_closing_entry and pos_closing_entry[0]:
-				msg = _("To cancel a {} you need to cancel the POS Closing Entry {}.").format(
+				msg = _("To cancel a {0} you need to cancel the POS Closing Entry {1}.").format(
 					frappe.bold(_("Consolidated Sales Invoice")),
 					get_link_to_form("POS Closing Entry", pos_closing_entry[0]),
 				)
@@ -362,9 +362,9 @@ def update_multi_mode_option(doc, pos_profile) -> None:
 
 	if invalid_modes:
 		if invalid_modes == 1:
-			msg = _("Please set default Cash or Bank account in Mode of Payment {}")
+			msg = _("Please set default Cash or Bank account in Mode of Payment {0}")
 		else:
-			msg = _("Please set default Cash or Bank account in Mode of Payments {}")
+			msg = _("Please set default Cash or Bank account in Mode of Payments {0}")
 		frappe.throw(msg.format(", ".join(invalid_modes)), title=_("Missing Account"))
 
 	if mop_refetched:

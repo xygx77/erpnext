@@ -440,7 +440,7 @@ def get_clearance_details(transaction, payment_entry, bt_allocations, gl_entries
 
 		if bt_bank_account != gl_bank_account:
 			frappe.throw(
-				_("Bank Account {} in Bank Transaction {} is not matching with Bank Account {}").format(
+				_("Bank Account {0} in Bank Transaction {1} is not matching with Bank Account {2}").format(
 					bt_bank_account, payment_entry.payment_entry, gl_bank_account
 				)
 			)
@@ -449,7 +449,7 @@ def get_clearance_details(transaction, payment_entry, bt_allocations, gl_entries
 
 	if gl_bank_account not in gl_entries:
 		frappe.throw(
-			_("{} {} is not affecting bank account {}").format(
+			_("{0} {1} is not affecting bank account {2}").format(
 				payment_entry.payment_document, payment_entry.payment_entry, gl_bank_account
 			)
 		)
@@ -457,7 +457,7 @@ def get_clearance_details(transaction, payment_entry, bt_allocations, gl_entries
 	allocable_amount = gl_entries.pop(gl_bank_account) or 0
 	if allocable_amount <= 0.0:
 		frappe.throw(
-			_("Invalid amount in accounting entries of {} {} for Account {}: {}").format(
+			_("Invalid amount in accounting entries of {0} {1} for Account {2}: {3}").format(
 				payment_entry.payment_document, payment_entry.payment_entry, gl_bank_account, allocable_amount
 			)
 		)

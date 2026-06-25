@@ -679,8 +679,9 @@ def get_columns(filters):
 		and filters["presentation_currency"] != company_currency
 	):
 		frappe.throw(
-			_(
-				f'Presentation Currency cannot be {frappe.bold(filters["presentation_currency"])} , When {frappe.bold("Show Credit / Debit in Company Currency")} is enabled.'
+			_("Presentation Currency cannot be {0}, when {1} is enabled.").format(
+				frappe.bold(filters["presentation_currency"]),
+				frappe.bold(_("Show Credit / Debit in Company Currency")),
 			)
 		)
 

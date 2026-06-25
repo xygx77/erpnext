@@ -207,7 +207,7 @@ class ChildItemUpdater:
 		except frappe.PermissionError:
 			actions = {"create": "add", "write": "update"}
 			frappe.throw(
-				_("You do not have permissions to {} items in a {}.").format(
+				_("You do not have permissions to {0} items in a {1}.").format(
 					actions[perm_type], self.parent_doctype
 				),
 				title=_("Insufficient Permissions"),
@@ -229,7 +229,7 @@ class ChildItemUpdater:
 
 		if not allowed:
 			frappe.throw(
-				_("You are not allowed to update as per the conditions set in {} Workflow.").format(
+				_("You are not allowed to update as per the conditions set in {0} Workflow.").format(
 					get_link_to_form("Workflow", workflow)
 				),
 				title=_("Insufficient Permissions"),
@@ -512,7 +512,7 @@ def update_child_item_rate_and_discount(
 		rate_unchanged = flt(child_item.get("rate")) == flt(new_data.get("rate"))
 
 	if not rate_unchanged and not child_item.get("qty") and allow_zero_qty:
-		frappe.throw(_("Rate of '{}' items cannot be changed").format(frappe.bold(_("Unit Price"))))
+		frappe.throw(_("Rate of '{0}' items cannot be changed").format(frappe.bold(_("Unit Price"))))
 
 	row_rate = flt(new_data.get("rate"), rate_precision)
 

@@ -66,7 +66,7 @@ class BankTransactionRule(Document):
 				frappe.throw(_("Party type is required to create a payment entry."))
 
 			if not self.party:
-				frappe.throw(_("Party is required create a payment entry."))
+				frappe.throw(_("Party is required to create a payment entry."))
 
 			if not self.account:
 				frappe.throw(_("Party account is required to create a payment entry."))

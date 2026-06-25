@@ -621,7 +621,7 @@ class PaymentEntry(AccountsController):
 
 	def validate_payment_type(self):
 		if self.payment_type not in ("Receive", "Pay", "Internal Transfer"):
-			frappe.throw(_("Payment Type must be one of Receive, Pay and Internal Transfer"))
+			frappe.throw(_("Payment Type must be one of Receive, Pay, or Internal Transfer"))
 
 	def validate_party_details(self):
 		if self.party and not frappe.db.exists(self.party_type, self.party):
@@ -678,7 +678,7 @@ class PaymentEntry(AccountsController):
 
 			elif d.reference_name:
 				if not frappe.db.exists(d.reference_doctype, d.reference_name):
-					frappe.throw(_("{0} {1} does not exist").format(d.reference_doctype, d.reference_name))
+					frappe.throw(_("{0} {1} does not exist").format(_(d.reference_doctype), d.reference_name))
 
 				ref_doc = frappe.get_lazy_doc(d.reference_doctype, d.reference_name)
 
@@ -2683,7 +2683,7 @@ def get_payment_entry(
 
 	# only Purchase Invoice can be blocked individually
 	if doc.doctype == "Purchase Invoice" and doc.invoice_is_blocked():
-		frappe.msgprint(_("{0} is on hold till {1}").format(doc.name, doc.release_date))
+		frappe.msgprint(_("{0} is on hold until {1}").format(doc.name, doc.release_date))
 	else:
 		if doc.doctype in (
 			"Sales Invoice",
@@ -3087,7 +3087,7 @@ def apply_early_payment_discount(paid_amount, received_amount, doc, party_accoun
 		if total_discount:
 			currency = doc.get("currency") if is_multi_currency else doc.company_currency
 			money = frappe.utils.fmt_money(total_discount, currency=currency)
-			frappe.msgprint(_("Discount of {} applied as per Payment Term").format(money), alert=1)
+			frappe.msgprint(_("Discount of {0} applied as per Payment Term").format(money), alert=1)
 
 	return paid_amount, received_amount, total_discount, valid_discounts
 
