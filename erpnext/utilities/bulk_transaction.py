@@ -30,7 +30,7 @@ def transaction_processing(
 
 		skipped_msg += (
 			"<br><br><ul>"
-			+ "".join(_("<li>{}</li>").format(frappe.bold(row.get("name"))) for row in skipped_records)
+			+ "".join(_("<li>{0}</li>").format(frappe.bold(row.get("name"))) for row in skipped_records)
 			+ "</ul>"
 		)
 
