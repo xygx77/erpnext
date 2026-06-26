@@ -16,21 +16,21 @@ class TestStockLedgerVariance(ERPNextTestSuite):
 		return execute(frappe._dict(filters))[1]
 
 	def test_healthy_stock_has_no_variance(self):
-		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 
-		item = make_item(properties={"is_stock_item": 1, "valuation_method": "Moving Average"}).name
+		item = "_Test Item"
+		frappe.db.set_value("Item", item, "valuation_method", "Moving Average")
 
 		make_stock_entry(
 			item_code=item,
-			to_warehouse="_Test Warehouse - _TC",
+			to_warehouse="Stores - _TC",
 			qty=10,
 			rate=100,
 			posting_date="2026-06-01",
 		)
 		make_stock_entry(
 			item_code=item,
-			from_warehouse="_Test Warehouse - _TC",
+			from_warehouse="Stores - _TC",
 			qty=4,
 			posting_date="2026-06-02",
 		)
@@ -44,35 +44,35 @@ class TestStockLedgerVariance(ERPNextTestSuite):
 		self.assertFalse([row for row in qty_data if row.get("item_code") == item])
 
 	def test_multiple_clean_movements_no_variance(self):
-		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 
-		item = make_item(properties={"is_stock_item": 1, "valuation_method": "Moving Average"}).name
+		item = "_Test Item"
+		frappe.db.set_value("Item", item, "valuation_method", "Moving Average")
 
 		make_stock_entry(
 			item_code=item,
-			to_warehouse="_Test Warehouse - _TC",
+			to_warehouse="Stores - _TC",
 			qty=10,
 			rate=100,
 			posting_date="2026-06-01",
 		)
 		make_stock_entry(
 			item_code=item,
-			to_warehouse="_Test Warehouse - _TC",
+			to_warehouse="Stores - _TC",
 			qty=5,
 			rate=120,
 			posting_date="2026-06-02",
 		)
 		make_stock_entry(
 			item_code=item,
-			to_warehouse="_Test Warehouse - _TC",
+			to_warehouse="Stores - _TC",
 			qty=8,
 			rate=90,
 			posting_date="2026-06-03",
 		)
 		make_stock_entry(
 			item_code=item,
-			from_warehouse="_Test Warehouse - _TC",
+			from_warehouse="Stores - _TC",
 			qty=6,
 			posting_date="2026-06-04",
 		)
