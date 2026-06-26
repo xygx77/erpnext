@@ -26,26 +26,20 @@ class TestIncorrectSerialAndBatchBundle(ERPNextTestSuite):
 				"batch_number_series": "ISBB-.#####",
 			}
 		).name
-		serial_item = make_item(
-			properties={
-				"is_stock_item": 1,
-				"has_serial_no": 1,
-				"serial_no_series": "ISBS-.#####",
-			}
-		).name
+		serial_item = "_Test Serialized Item With Series"
 
 		make_stock_entry(
 			item_code=batch_item,
 			qty=10,
 			rate=100,
-			to_warehouse="_Test Warehouse - _TC",
+			to_warehouse="Stores - _TC",
 			posting_date="2026-06-01",
 		)
 		make_stock_entry(
 			item_code=serial_item,
 			qty=3,
 			rate=100,
-			to_warehouse="_Test Warehouse - _TC",
+			to_warehouse="Stores - _TC",
 			posting_date="2026-06-01",
 		)
 
