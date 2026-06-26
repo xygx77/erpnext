@@ -11,6 +11,9 @@ from erpnext.tests.utils import ERPNextTestSuite
 BANK = "_Test Bank - _TC"
 INCOME_PARENT = "Income - _TC"
 EXPENSE_PARENT = "Expenses - _TC"
+# bootstrap leaf accounts that already have include_in_gross = 0 (no creation needed)
+NON_GROSS_INCOME = "_Test Account Sales - _TC"
+NON_GROSS_EXPENSE = "_Test Account Cost for Goods Sold - _TC"
 # an isolated fiscal year so other accounts contribute nothing to the totals
 FY = "_Test Fiscal Year 2049"
 DATE = "2049-06-01"
@@ -48,15 +51,14 @@ class TestGrossAndNetProfitReport(ERPNextTestSuite):
 		return next(row for row in data if row.get("account") == account)
 
 	def test_gross_profit_excludes_non_gross_accounts(self):
+		# reuse bootstrap accounts for the non-gross (include_in_gross = 0) side
 		gross_income = self.make_account("_Test GNP Gross Income", INCOME_PARENT, include_in_gross=1)
-		non_gross_income = self.make_account("_Test GNP Other Income", INCOME_PARENT, include_in_gross=0)
 		gross_expense = self.make_account("_Test GNP Gross Expense", EXPENSE_PARENT, include_in_gross=1)
-		non_gross_expense = self.make_account("_Test GNP Other Expense", EXPENSE_PARENT, include_in_gross=0)
 
 		self.book_income(gross_income, 10000)
-		self.book_income(non_gross_income, 2000)
+		self.book_income(NON_GROSS_INCOME, 2000)
 		self.book_expense(gross_expense, 4000)
-		self.book_expense(non_gross_expense, 1000)
+		self.book_expense(NON_GROSS_EXPENSE, 1000)
 
 		data = self.run_report()
 		# gross profit only counts include_in_gross accounts: 10000 - 4000
@@ -77,5 +79,7 @@ class TestGrossAndNetProfitReport(ERPNextTestSuite):
 
 	def test_nothing_included_in_gross_when_no_entries(self):
 		# a fiscal year with no income/expense entries yields the placeholder row
-		data = self.run_report(from_fiscal_year="_Test Fiscal Year 2048", to_fiscal_year="_Test Fiscal Year 2048")
+		data = self.run_report(
+			from_fiscal_year="_Test Fiscal Year 2048", to_fiscal_year="_Test Fiscal Year 2048"
+		)
 		self.assertEqual(data[0]["account"], "'Nothing is included in gross'")
