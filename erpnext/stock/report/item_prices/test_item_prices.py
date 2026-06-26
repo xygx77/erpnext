@@ -3,12 +3,16 @@
 
 import frappe
 
+from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
+from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.report.item_prices.item_prices import execute
 from erpnext.tests.utils import ERPNextTestSuite
 
 # Positional columns returned by the report (it returns string-format columns,
 # not dicts, so rows are plain lists indexed by position).
 ITEM_CODE = 0
+LAST_PURCHASE_RATE = 6
+VALUATION_RATE = 7
 SALES_PRICE_LIST = 8
 PURCHASE_PRICE_LIST = 9
 
@@ -63,3 +67,24 @@ class TestItemPrices(ERPNextTestSuite):
 		# A buying price must not leak into the selling column.
 		self.assertNotIn("175.0", row[SALES_PRICE_LIST] or "")
 		self.assertNotIn("Standard Buying", row[SALES_PRICE_LIST] or "")
+
+	def test_last_purchase_rate_from_receipt(self):
+		"""The latest purchase rate (from a Purchase Receipt) shows in the Last Purchase Rate column."""
+		item = "_Test Item"
+		make_purchase_receipt(
+			item_code=item, qty=5, rate=500, company="_Test Company", posting_date="2026-06-01"
+		)
+
+		row = self.row_for(self.run_report(), item)
+		self.assertEqual(row[LAST_PURCHASE_RATE], 500)
+
+	def test_valuation_rate_from_stock(self):
+		"""The Bin valuation rate shows in the Valuation Rate column."""
+		# _Test FG Item has no opening-stock baseline, so its valuation reflects only this receipt
+		item = "_Test FG Item"
+		make_stock_entry(
+			item_code=item, to_warehouse="Stores - _TC", qty=10, rate=250, posting_date="2026-06-01"
+		)
+
+		row = self.row_for(self.run_report(), item)
+		self.assertEqual(row[VALUATION_RATE], 250)
