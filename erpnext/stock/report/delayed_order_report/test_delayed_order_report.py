@@ -5,7 +5,6 @@ import frappe
 
 from erpnext.selling.doctype.sales_order.mapper import make_delivery_note
 from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_order
-from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.report.delayed_order_report.delayed_order_report import execute
 from erpnext.tests.utils import ERPNextTestSuite
@@ -25,18 +24,22 @@ class TestDelayedOrderReport(ERPNextTestSuite):
 		return execute(filters)[1]
 
 	def test_late_order_shows_delay(self):
-		item_code = make_item(properties={"is_stock_item": 1, "is_sales_item": 1}).name
+		item_code = "_Test Item"
 
 		make_stock_entry(
 			item_code=item_code,
-			target="_Test Warehouse - _TC",
+			target="Stores - _TC",
 			qty=10,
 			basic_rate=100,
 			posting_date="2026-06-01",
 		)
 
 		sales_order = make_sales_order(
-			item_code=item_code, qty=5, transaction_date="2026-06-01", do_not_submit=True
+			item_code=item_code,
+			qty=5,
+			warehouse="Stores - _TC",
+			transaction_date="2026-06-01",
+			do_not_submit=True,
 		)
 		sales_order.delivery_date = "2026-06-05"
 		for item in sales_order.items:
