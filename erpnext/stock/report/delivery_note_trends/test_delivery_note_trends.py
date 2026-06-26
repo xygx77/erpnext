@@ -27,22 +27,23 @@ class TestDeliveryNoteTrends(ERPNextTestSuite):
 		# A submitted Delivery Note of qty 5 @ rate 200 should sum to qty 5 / amount 1000
 		# (base_net_amount) in both the yearly bucket and the Total columns.
 		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
-		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 
-		item = make_item(properties={"is_stock_item": 1, "is_sales_item": 1}).name
+		item = "_Test Item"
 
 		make_stock_entry(
 			item_code=item,
-			to_warehouse="_Test Warehouse - _TC",
+			to_warehouse="Stores - _TC",
 			qty=20,
 			rate=100,
 			posting_date="2026-06-01",
 		)
 		create_delivery_note(
 			item_code=item,
+			warehouse="Stores - _TC",
 			qty=5,
 			rate=200,
+			customer="_Test Customer",
 			company="_Test Company",
 			posting_date="2026-06-01",
 		)
