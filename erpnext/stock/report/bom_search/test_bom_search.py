@@ -3,7 +3,6 @@
 
 import frappe
 
-from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.report.bom_search.bom_search import execute
 from erpnext.tests.utils import ERPNextTestSuite
 
@@ -15,8 +14,8 @@ class TestBomSearch(ERPNextTestSuite):
 		return execute(filters)[1]
 
 	def test_bom_found_by_contained_item(self):
-		raw_material = make_item(properties={"is_stock_item": 1}).name
-		finished_good = make_item(properties={"is_stock_item": 1}).name
+		raw_material = "_Test Item"
+		finished_good = "_Test FG Item"
 
 		bom = frappe.get_doc(doctype="BOM", item=finished_good, company="_Test Company", currency="INR")
 		bom.append("items", {"item_code": raw_material, "qty": 1})
