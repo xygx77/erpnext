@@ -22,17 +22,10 @@ class TestSerialAndBatchSummary(ERPNextTestSuite):
 		frappe.delete_doc("Stock Entry", name, force=1)
 
 	def test_serial_receipt_listed(self):
-		from erpnext.stock.doctype.item.test_item import make_item
 		from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 
-		item = make_item(
-			properties={
-				"is_stock_item": 1,
-				"has_serial_no": 1,
-				"serial_no_series": "SBS-.#####",
-			}
-		).name
-		se = make_stock_entry(item_code=item, to_warehouse="_Test Warehouse - _TC", qty=3, basic_rate=100)
+		item = "_Test Serialized Item With Series"
+		se = make_stock_entry(item_code=item, to_warehouse="Stores - _TC", qty=3, basic_rate=100)
 		self.addCleanup(self._cancel_and_delete_stock_entry, se.name)
 
 		data = self.run_report(voucher_no=[se.name], voucher_type="Stock Entry")
@@ -43,7 +36,7 @@ class TestSerialAndBatchSummary(ERPNextTestSuite):
 			self.assertTrue(row.serial_no)
 			self.assertEqual(row.qty, 1)
 			self.assertEqual(row.incoming_rate, 100)
-			self.assertEqual(row.warehouse, "_Test Warehouse - _TC")
+			self.assertEqual(row.warehouse, "Stores - _TC")
 			self.assertEqual(row.voucher_no, se.name)
 
 	def test_batch_receipt_listed(self):
