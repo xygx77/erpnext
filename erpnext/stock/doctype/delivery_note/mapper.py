@@ -79,7 +79,7 @@ def make_sales_invoice(
 		target.run_method("set_po_nos")
 
 		if len(target.get("items")) == 0:
-			frappe.throw(_("All these items have already been Invoiced/Returned"))
+			frappe.throw(_("All these items have already been invoiced/returned"))
 
 		if args and args.get("merge_taxes"):
 			merge_taxes(source, target)

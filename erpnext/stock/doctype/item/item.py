@@ -463,7 +463,7 @@ class Item(Document):
 
 	def validate_item_type(self):
 		if self.has_serial_no == 1 and self.is_stock_item == 0 and not self.is_fixed_asset:
-			frappe.throw(_("'Has Serial No' can not be 'Yes' for non-stock item"))
+			frappe.throw(_("'Has Serial No' cannot be 'Yes' for non-stock item"))
 
 		if self.has_serial_no == 0 and self.serial_no_series:
 			self.serial_no_series = None
@@ -1508,7 +1508,9 @@ def validate_item_default_company_links(item_defaults: list[ItemDefault]) -> Non
 				company = frappe.db.get_value(doctype, item_default.get(field), "company", cache=True)
 				if company and company != item_default.company:
 					frappe.throw(
-						_("Row #{}: {} {} doesn't belong to Company {}. Please select valid {}.").format(
+						_(
+							"Row #{0}: {1} {2} does not belong to Company {3}. Please select valid {4}."
+						).format(
 							item_default.idx,
 							doctype,
 							frappe.bold(item_default.get(field)),

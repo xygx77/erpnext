@@ -390,7 +390,7 @@ def validate_serial_no_with_batch(serial_nos, item_code):
 
 	serial_no_link = ",".join(get_link_to_form("Serial No", sn) for sn in serial_nos)
 
-	message = "Serial Nos" if len(serial_nos) > 1 else "Serial No"
+	message = _("Serial Nos") if len(serial_nos) > 1 else _("Serial No")
 	frappe.throw(_("There is no batch found against the {0}: {1}").format(message, serial_no_link))
 
 

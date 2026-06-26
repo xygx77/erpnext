@@ -134,7 +134,7 @@ class QualityInspection(Document):
 		):
 			frappe.throw(
 				_(
-					"'Inspection Required before Purchase' has disabled for the item {0}, no need to create the QI"
+					"'Inspection Required before Purchase' is disabled for the item {0}, no need to create the QI"
 				).format(get_link_to_form("Item", self.item_code))
 			)
 
@@ -143,7 +143,7 @@ class QualityInspection(Document):
 		):
 			frappe.throw(
 				_(
-					"'Inspection Required before Delivery' has disabled for the item {0}, no need to create the QI"
+					"'Inspection Required before Delivery' is disabled for the item {0}, no need to create the QI"
 				).format(get_link_to_form("Item", self.item_code))
 			)
 

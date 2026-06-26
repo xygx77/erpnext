@@ -165,7 +165,7 @@ class SerialandBatchBundle(Document):
 
 		if invalid_serial_nos:
 			msg = _(
-				"You cannot outward following {0} as either they are Delivered, Inactive or located in a different warehouse."
+				"You cannot outward the following {0} as they are either Delivered, Inactive or located in a different warehouse."
 			).format(_("Serial Nos") if len(invalid_serial_nos) > 1 else _("Serial No"))
 			msg += "<hr>"
 			msg += ", ".join(sn for sn in invalid_serial_nos)
@@ -183,7 +183,7 @@ class SerialandBatchBundle(Document):
 		if self.voucher_type == "POS Invoice":
 			if not frappe.db.exists("POS Invoice Item", self.voucher_detail_no):
 				frappe.throw(
-					_("The serial and batch bundle {0} not linked to {1} {2}").format(
+					_("The serial and batch bundle {0} is not linked to {1} {2}").format(
 						bold(self.name), self.voucher_type, bold(self.voucher_no)
 					)
 				)
@@ -195,7 +195,7 @@ class SerialandBatchBundle(Document):
 				return
 
 			frappe.throw(
-				_("The serial and batch bundle {0} not linked to {1} {2}").format(
+				_("The serial and batch bundle {0} is not linked to {1} {2}").format(
 					bold(self.name), self.voucher_type, bold(self.voucher_no)
 				)
 			)
@@ -227,7 +227,7 @@ class SerialandBatchBundle(Document):
 		for row in data:
 			frappe.throw(
 				_(
-					"You can't process the serial number {0} as it has already been used in the SABB {1}. {2} if you want to inward same serial number multiple times then enabled 'Allow existing Serial No to be Manufactured/Received again' in the {3}"
+					"You cannot process the serial number {0} as it has already been used in the SABB {1}. {2} If you want to inward the same serial number multiple times, then enable 'Allow existing Serial No to be Manufactured/Received again' in the {3}"
 				).format(
 					row.serial_no,
 					get_link_to_form("Serial and Batch Bundle", row.parent),
@@ -376,7 +376,7 @@ class SerialandBatchBundle(Document):
 				if len(serial_nos) == 1:
 					frappe.throw(
 						_(
-							"Serial No {0} is already Delivered. You cannot use them again in Manufacture / Repack entry."
+							"Serial No {0} is already Delivered. You cannot use it again in Manufacture / Repack entry."
 						).format(bold(serial_nos[0]))
 					)
 				else:
@@ -654,12 +654,12 @@ class SerialandBatchBundle(Document):
 
 	def validate_negative_batch(self, batch_no, available_qty):
 		if available_qty < 0 and not self.is_stock_reco_for_valuation_adjustment(available_qty):
-			msg = f"""Batch No {bold(batch_no)} of an Item {bold(self.item_code)}
-				has negative stock
-				of quantity {bold(available_qty)} in the
-				warehouse {self.warehouse}"""
-
-			frappe.throw(_(msg), BatchNegativeStockError)
+			frappe.throw(
+				_("Batch No {0} of Item {1} has negative stock of quantity {2} in the warehouse {3}").format(
+					bold(batch_no), bold(self.item_code), bold(available_qty), self.warehouse
+				),
+				BatchNegativeStockError,
+			)
 
 	def is_stock_reco_for_valuation_adjustment(self, available_qty):
 		if (
@@ -1153,8 +1153,7 @@ class SerialandBatchBundle(Document):
 
 	def validate_serial_and_batch_no(self):
 		if self.item_code and not self.has_serial_no and not self.has_batch_no:
-			msg = f"The Item {self.item_code} does not have Serial No or Batch No"
-			frappe.throw(_(msg))
+			frappe.throw(_("The Item {0} does not have Serial No or Batch No").format(self.item_code))
 
 		serial_nos = []
 		batch_nos = []
@@ -1589,12 +1588,11 @@ class SerialandBatchBundle(Document):
 			date_msg = " " + _("as of {0}").format(format_datetime(posting_datetime))
 
 		msg = _(
-			"""
-			The Batch {0} of an item {1} has negative stock in the warehouse {2}{3}.
-			Please add a stock quantity of {4} to proceed with this entry.
-			If it is not possible to make an adjustment entry, please enable 'Allow Negative Stock for Batch' in the batch {0} or in the Stock Settings to proceed.
-			However, enabling this setting may lead to negative stock in the system.
-			So please ensure the stock levels are adjusted as soon as possible to maintain the correct valuation rate."""
+			"The Batch {0} of item {1} has negative stock in the warehouse {2}{3}. "
+			"Please add a stock quantity of {4} to proceed with this entry. "
+			"If it is not possible to make an adjustment entry, please enable 'Allow Negative Stock for Batch' in the batch {0} or in the Stock Settings to proceed. "
+			"However, enabling this setting may lead to negative stock in the system. "
+			"So please ensure the stock levels are adjusted as soon as possible to maintain the correct valuation rate."
 		).format(
 			bold(batch_no),
 			bold(self.item_code),
@@ -1728,9 +1726,11 @@ class SerialandBatchBundle(Document):
 			and self.voucher_detail_no
 			and frappe.db.exists(child_doctype, self.voucher_detail_no)
 		):
-			msg = f"""The {self.voucher_type} {bold(self.voucher_no)}
-				is in submitted state, please cancel it first"""
-			frappe.throw(_(msg))
+			frappe.throw(
+				_("The {0} {1} is in submitted state, please cancel it first").format(
+					self.voucher_type, bold(self.voucher_no)
+				)
+			)
 
 	def on_trash(self):
 		self.validate_voucher_no_docstatus()
@@ -3486,13 +3486,13 @@ def is_serial_batch_no_exists(
 ):
 	if serial_no and not frappe.db.exists("Serial No", serial_no):
 		if type_of_transaction != "Inward":
-			frappe.throw(_("Serial No {0} does not exists").format(serial_no))
+			frappe.throw(_("Serial No {0} does not exist").format(serial_no))
 
 		make_serial_no(serial_no, item_code)
 
 	if batch_no and not frappe.db.exists("Batch", batch_no):
 		if type_of_transaction != "Inward":
-			frappe.throw(_("Batch No {0} does not exists").format(batch_no))
+			frappe.throw(_("Batch No {0} does not exist").format(batch_no))
 
 		make_batch_no(batch_no, item_code)
 

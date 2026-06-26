@@ -209,7 +209,7 @@ class RepostItemValuation(Document):
 			):
 				frappe.msgprint(_("Caution: This might alter frozen accounts."))
 				return
-			frappe.throw(_("You cannot repost item valuation before {}").format(acc_frozen_till_date))
+			frappe.throw(_("You cannot repost item valuation before {0}").format(acc_frozen_till_date))
 
 	def reset_field_values(self):
 		if self.based_on == "Transaction":

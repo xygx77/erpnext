@@ -982,7 +982,7 @@ class StockReconciliation(StockController):
 			if frappe.db.get_value("Account", self.expense_account, "report_type") == "Profit and Loss":
 				frappe.throw(
 					_(
-						"Difference Account must be a Asset/Liability type account, since this Stock Reconciliation is an Opening Entry"
+						"Difference Account must be an Asset/Liability type account, since this Stock Reconciliation is an Opening Entry"
 					),
 					OpeningEntryAccountError,
 				)
@@ -1246,7 +1246,7 @@ def get_stock_balance_for(
 
 	if not item_dict:
 		# In cases of data upload to Items table
-		msg = _("Item {} does not exist.").format(item_code)
+		msg = _("Item {0} does not exist.").format(item_code)
 		frappe.throw(msg, title=_("Missing"))
 
 	serial_nos = None

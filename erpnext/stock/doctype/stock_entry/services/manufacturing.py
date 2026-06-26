@@ -124,7 +124,8 @@ class BaseManufactureStockEntry(BaseStockEntry):
 					self.doc.process_loss_qty = flt(process_loss_qty, precision)
 
 					frappe.msgprint(
-						_("The Process Loss Qty has reset as per job cards Process Loss Qty"), alert=True
+						_("The Process Loss Qty has been reset as per the Job Card's Process Loss Qty"),
+						alert=True,
 					)
 
 		if not self.doc.process_loss_percentage and not self.doc.process_loss_qty:
