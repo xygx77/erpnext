@@ -4,12 +4,13 @@
 import frappe
 
 from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
-from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.report.serial_no_and_batch_traceability.serial_no_and_batch_traceability import (
 	execute,
 )
 from erpnext.tests.utils import ERPNextTestSuite
+
+SERIAL_ITEM = "_Test Serialized Item With Series"
 
 
 class TestSerialNoAndBatchTraceability(ERPNextTestSuite):
@@ -18,30 +19,28 @@ class TestSerialNoAndBatchTraceability(ERPNextTestSuite):
 		filters.update(extra)
 		return execute(filters)[1]
 
-	def make_serial_item(self):
-		return make_item(
-			properties={
-				"is_stock_item": 1,
-				"has_serial_no": 1,
-				"serial_no_series": "SNT-.#####",
-			}
-		).name
+	def get_received_serial_no(self, receipt):
+		bundle = frappe.db.get_value(
+			"Stock Entry Detail",
+			{"parent": receipt.name, "item_code": SERIAL_ITEM},
+			"serial_and_batch_bundle",
+		)
+		return frappe.db.get_value("Serial and Batch Entry", {"parent": bundle}, "serial_no")
 
 	def test_serial_movements_traced(self):
 		"""Backward trace should surface the receipt voucher the serial came in through."""
-		item = self.make_serial_item()
 		receipt = make_stock_entry(
-			item_code=item,
-			to_warehouse="_Test Warehouse - _TC",
+			item_code=SERIAL_ITEM,
+			to_warehouse="Stores - _TC",
 			qty=2,
 			rate=100,
 			posting_date="2026-06-01",
 			company="_Test Company",
 		)
-		serial_no = frappe.get_all("Serial No", {"item_code": item}, pluck="name")[0]
+		serial_no = self.get_received_serial_no(receipt)
 
 		rows = self.run_report(
-			item_code=item,
+			item_code=SERIAL_ITEM,
 			serial_nos=[serial_no],
 			traceability_direction="Backward",
 		)
@@ -51,36 +50,36 @@ class TestSerialNoAndBatchTraceability(ERPNextTestSuite):
 
 		receipt_row = traced[receipt.name]
 		self.assertEqual(receipt_row["serial_no"], serial_no)
-		self.assertEqual(receipt_row["item_code"], item)
+		self.assertEqual(receipt_row["item_code"], SERIAL_ITEM)
 		self.assertEqual(receipt_row["reference_doctype"], "Stock Entry")
-		self.assertEqual(receipt_row["warehouse"], "_Test Warehouse - _TC")
+		self.assertEqual(receipt_row["warehouse"], "Stores - _TC")
 		self.assertEqual(receipt_row["direction"], "Backward")
 		self.assertGreater(receipt_row["qty"], 0)
 
 	def test_forward_and_backward_directions(self):
 		"""'Both' should trace backward to the receipt and forward to the outward delivery."""
-		item = self.make_serial_item()
 		receipt = make_stock_entry(
-			item_code=item,
-			to_warehouse="_Test Warehouse - _TC",
+			item_code=SERIAL_ITEM,
+			to_warehouse="Stores - _TC",
 			qty=2,
 			rate=100,
 			posting_date="2026-06-01",
 			company="_Test Company",
 		)
-		serial_no = frappe.get_all("Serial No", {"item_code": item}, pluck="name")[0]
+		serial_no = self.get_received_serial_no(receipt)
 
 		delivery_note = create_delivery_note(
-			item_code=item,
+			item_code=SERIAL_ITEM,
 			qty=1,
 			serial_no=[serial_no],
-			warehouse="_Test Warehouse - _TC",
+			warehouse="Stores - _TC",
+			customer="_Test Customer",
 			posting_date="2026-06-03",
 			company="_Test Company",
 		)
 
 		rows = self.run_report(
-			item_code=item,
+			item_code=SERIAL_ITEM,
 			serial_nos=[serial_no],
 			traceability_direction="Both",
 		)
