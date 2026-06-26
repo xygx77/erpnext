@@ -21,7 +21,7 @@ class TestItemVariantDetails(ERPNextTestSuite):
 
 		make_stock_entry(
 			item_code=variant.name,
-			to_warehouse="_Test Warehouse - _TC",
+			to_warehouse="Stores - _TC",
 			qty=5,
 			rate=100,
 		)
