@@ -895,7 +895,11 @@ class GrossProfitGenerator:
 		if row.cost_center:
 			query = query.where(purchase_invoice_item.cost_center == row.cost_center)
 
-		query = query.orderby(purchase_invoice.posting_date, order=frappe.qb.desc).limit(1)
+		query = (
+			query.orderby(purchase_invoice.posting_date, order=frappe.qb.desc)
+			.orderby(purchase_invoice.name, order=frappe.qb.desc)
+			.limit(1)
+		)
 		last_purchase_rate = query.run()
 
 		return flt(last_purchase_rate[0][0]) if last_purchase_rate else 0
