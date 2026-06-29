@@ -66,7 +66,7 @@ jobs:
         run: echo "127.0.0.1 test_site" | sudo tee -a /etc/hosts
 
       # The v14 baseline backup is a fixed published file — cache it instead of re-downloading
-      # ~100MB from frappe.io every run.
+      # it from the GitHub release every run.
       - name: Cache erpnext v14 backup
         id: cache-v14
         uses: actions/cache@v4
@@ -76,7 +76,9 @@ jobs:
 
       - name: Download erpnext v14 backup
         if: steps.cache-v14.outputs.cache-hit != 'true'
-        run: wget -O ~/erpnext-v14.sql.gz https://frappe.io/files/erpnext-v14.sql.gz
+        run: gh release download v14-baseline -R frappe/erpnext -p erpnext-v14.sql.gz -O ~/erpnext-v14.sql.gz
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Cache pip
         uses: actions/cache@v4
