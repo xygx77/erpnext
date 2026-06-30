@@ -87,6 +87,12 @@ class StatusService:
 
 	def update_status(self, status=None):
 		"""Update status of work order if unknown"""
+		if self.doc.docstatus == 1:
+			# Refresh material_transferred_for_manufacturing before deciding status so pick-list-
+			# driven transfers (where this qty is derived from item transfers, not fg_completed_qty)
+			# are reflected immediately, instead of only after the next status update call.
+			self.doc.refresh_material_transferred_for_manufacturing()
+
 		if self.doc.status != "Closed":
 			if status not in ["Stopped", "Closed"]:
 				status = self.get_status(status)

@@ -1003,6 +1003,9 @@ class WorkOrder(Document):
 	def update_transferred_qty_for_required_items(self):
 		return RequiredItemsService(self).update_transferred_qty_for_required_items()
 
+	def refresh_material_transferred_for_manufacturing(self):
+		return RequiredItemsService(self).refresh_material_transferred_for_manufacturing()
+
 	def update_returned_qty(self):
 		return RequiredItemsService(self).update_returned_qty()
 
