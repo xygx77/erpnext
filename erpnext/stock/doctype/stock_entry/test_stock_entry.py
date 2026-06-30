@@ -2839,6 +2839,44 @@ class TestStockEntry(ERPNextTestSuite):
 		frappe.get_doc(_make_stock_entry(work_order.name, "Material Consumption for Manufacture", 5)).submit()
 		frappe.get_doc(_make_stock_entry(work_order.name, "Manufacture", 5)).submit()
 
+	@ERPNextTestSuite.change_settings(
+		"Manufacturing Settings",
+		{"material_consumption": 1, "backflush_raw_materials_based_on": "BOM"},
+	)
+	def test_qi_not_required_for_material_consumption_for_manufacture(self):
+		"""An inspection_required BOM inspects the finished good (the Manufacture rule),
+		not each consumed raw material, so Material Consumption for Manufacture (whose
+		rows are outgoing only) must still submit without a Quality Inspection."""
+		from erpnext.manufacturing.doctype.production_plan.test_production_plan import make_bom
+		from erpnext.manufacturing.doctype.work_order.mapper import make_stock_entry as _make_stock_entry
+		from erpnext.manufacturing.doctype.work_order.work_order import make_work_order
+
+		fg_item = make_item("_Test QI Consumption FG", properties={"is_stock_item": 1}).name
+		rm_item = make_item("_Test QI Consumption RM", properties={"is_stock_item": 1}).name
+		warehouse = "Stores - WP"
+
+		bom = make_bom(item=fg_item, raw_materials=[rm_item], do_not_submit=True)
+		bom.inspection_required = 1
+		bom.submit()
+
+		se = make_stock_entry(item_code=rm_item, target=warehouse, qty=5, rate=10, purpose="Material Receipt")
+
+		work_order = make_work_order(bom.name, fg_item, 5)
+		work_order.company = se.company
+		work_order.skip_transfer = 1
+		work_order.source_warehouse = warehouse
+		work_order.fg_warehouse = warehouse
+		work_order.submit()
+
+		consumption = frappe.get_doc(
+			_make_stock_entry(work_order.name, "Material Consumption for Manufacture", 5)
+		)
+		# the mapper copies inspection_required from the BOM ...
+		self.assertEqual(consumption.inspection_required, 1)
+		# ... but the consumed rows are outgoing-only, so no QI is required and submit succeeds
+		consumption.submit()
+		self.assertEqual(consumption.docstatus, 1)
+
 	def test_qi_creation_with_naming_rule_company_condition(self):
 		"""
 		Unit test case to check the document naming rule with company condition

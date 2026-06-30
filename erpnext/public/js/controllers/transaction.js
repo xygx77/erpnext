@@ -1,6 +1,8 @@
 // Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 // License: GNU General Public License v3. See license.txt
 
+// Keep these in sync with QI_INCOMING_PURPOSES / QI_OUTGOING_PURPOSES /
+// stock_entry_row_requires_inspection in stock/services/quality_inspection_service.py.
 erpnext.stock = erpnext.stock || {};
 erpnext.stock.qi_incoming_purposes = [
 	"Material Receipt",
@@ -8,13 +10,23 @@ erpnext.stock.qi_incoming_purposes = [
 	"Receive from Customer",
 	"Subcontracting Return",
 ];
+erpnext.stock.qi_outgoing_purposes = [
+	"Material Issue",
+	"Material Transfer",
+	"Material Transfer for Manufacture",
+	"Send to Subcontractor",
+	"Subcontracting Delivery",
+	"Disassemble",
+];
 erpnext.stock.is_incoming_qi_purpose = (purpose) =>
 	purpose === "Manufacture" || erpnext.stock.qi_incoming_purposes.includes(purpose);
 erpnext.stock.row_requires_quality_inspection = (purpose, row) => {
 	if (row.secondary_item_type || row.is_legacy_scrap_item) return false;
 	if (purpose === "Manufacture") return !!row.is_finished_item;
 	if (erpnext.stock.qi_incoming_purposes.includes(purpose)) return !!row.t_warehouse;
-	return !!row.s_warehouse && row.s_warehouse !== row.t_warehouse;
+	if (erpnext.stock.qi_outgoing_purposes.includes(purpose))
+		return !!row.s_warehouse && row.s_warehouse !== row.t_warehouse;
+	return false;
 };
 
 erpnext.TransactionController = class TransactionController extends erpnext.taxes_and_totals {

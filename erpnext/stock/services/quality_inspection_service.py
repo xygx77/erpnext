@@ -26,11 +26,27 @@ INSPECTION_FIELDNAME_MAP = {
 	"Delivery Note": "inspection_required_before_delivery",
 }
 
+# Purposes whose inward (t_warehouse) row is inspected.
 QI_INCOMING_PURPOSES = (
 	"Material Receipt",
 	"Repack",
 	"Receive from Customer",
 	"Subcontracting Return",
+)
+
+# Purposes whose outgoing (s_warehouse) row is inspected. This is an explicit
+# allow-list rather than "everything that isn't incoming" so a new purpose can't
+# silently start requiring a QI. Material Consumption for Manufacture is left out
+# on purpose: an inspection_required BOM inspects the manufactured output (handled
+# by the "Manufacture" finished-good rule), not each consumed raw material.
+# Keep this in sync with erpnext.stock.qi_* helpers in transaction.js.
+QI_OUTGOING_PURPOSES = (
+	"Material Issue",
+	"Material Transfer",
+	"Material Transfer for Manufacture",
+	"Send to Subcontractor",
+	"Subcontracting Delivery",
+	"Disassemble",
 )
 
 
@@ -42,7 +58,9 @@ def stock_entry_row_requires_inspection(purpose, row):
 		return bool(row.is_finished_item)
 	if purpose in QI_INCOMING_PURPOSES:
 		return bool(row.t_warehouse)
-	return bool(row.s_warehouse and row.s_warehouse != row.t_warehouse)
+	if purpose in QI_OUTGOING_PURPOSES:
+		return bool(row.s_warehouse and row.s_warehouse != row.t_warehouse)
+	return False
 
 
 class QualityInspectionService:
