@@ -206,5 +206,5 @@ Prefer a comment that names the rule (e.g. "loose GROUP BY — Max()-wrap, don't
 splits the row count") so the fix is unambiguous.
 
 The static pre-commit checker (`.github/helper/postgres_compat.py`) catches the *mechanical*
-§1 breaks; the **semantic** §2/§3 divergences are exactly what a reviewer (and this guide) must
-cover, because no static check can see them.
+§1 breaks; the **semantic** §2/§3 divergences and the §6 refactor/conversion row-set changes are
+exactly what a reviewer (and this guide) must cover, because no static check can see them.
