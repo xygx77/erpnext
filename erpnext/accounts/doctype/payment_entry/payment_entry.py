@@ -514,10 +514,12 @@ class PaymentEntry(AccountsController):
 				invoice_names.add((ref.reference_doctype, ref.reference_name))
 
 		for doctype, name in invoice_names:
+			frappe.db.savepoint("subscription_update")
 			try:
 				doc = frappe.get_doc(doctype, name)
 				doc.refresh_subscription_status()
 			except Exception:
+				frappe.db.rollback(save_point="subscription_update")
 				frappe.log_error(_("Failed to update subscription status for {0} {1}").format(doctype, name))
 
 	def set_missing_values(self):

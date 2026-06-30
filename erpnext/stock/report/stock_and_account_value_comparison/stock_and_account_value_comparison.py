@@ -202,6 +202,7 @@ def create_reposting_entries(rows: str | list, company: str):
 
 	for key, sle in item_wh.items():
 		item_code, warehouse = key
+		frappe.db.savepoint("repost_value_comparison")
 		try:
 			doc = frappe.get_doc(
 				{
@@ -219,7 +220,7 @@ def create_reposting_entries(rows: str | list, company: str):
 
 			entries.append(get_link_to_form("Repost Item Valuation", doc.name))
 		except frappe.DuplicateEntryError:
-			pass
+			frappe.db.rollback(save_point="repost_value_comparison")
 
 	if entries:
 		entries = ", ".join(entries)

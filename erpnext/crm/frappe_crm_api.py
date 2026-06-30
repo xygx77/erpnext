@@ -26,6 +26,7 @@ def create_prospect_against_crm_deal():
 			prospect.insert()
 			prospect_name = prospect.name
 	except Exception:
+		frappe.db.rollback()
 		frappe.log_error(
 			frappe.get_traceback(),
 			f"Error while creating prospect against CRM Deal: {frappe.form_dict.get('crm_deal_id')}",
@@ -70,6 +71,7 @@ def create_address(doctype, docname, address):
 	if not address:
 		return
 	address = frappe.parse_json(address)
+	frappe.db.savepoint("crm_create_address")
 	try:
 		_address = frappe.db.exists("Address", address.get("name"))
 		if not _address:
@@ -97,6 +99,7 @@ def create_address(doctype, docname, address):
 			address.save(ignore_permissions=True)
 			return address.name
 	except Exception:
+		frappe.db.rollback(save_point="crm_create_address")
 		frappe.log_error(frappe.get_traceback(), f"Error while creating address for {docname}")
 
 
@@ -157,6 +160,7 @@ def create_customer(customer_data: dict | None = None):
 		create_address("Customer", customer_name, customer_data.get("address"))
 		return customer_name
 	except Exception:
+		frappe.db.rollback()
 		frappe.log_error(frappe.get_traceback(), "Error while creating customer against Frappe CRM Deal")
 		pass
 
