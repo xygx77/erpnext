@@ -169,6 +169,9 @@ def create_customer(customer_data: dict | None = None):
 	except Exception:
 		frappe.db.rollback(save_point="crm_customer_links")
 		frappe.log_error(frappe.get_traceback(), "Error while linking contacts/address to new Customer")
+		# keep the Customer, but preserve the pre-existing contract of returning None on a linking failure
+		# so CRM callers still see the failure signal
+		return
 
 	return customer_name
 
