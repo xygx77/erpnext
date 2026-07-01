@@ -81,7 +81,7 @@ class TestItemWisePurchaseHistory(ERPNextTestSuite):
 		self.assertNotIn(po_other_group.name, names)
 
 	def test_supplier_filter(self):
-		po = create_purchase_order(supplier="_Test Supplier", transaction_date="2026-06-01")
+		create_purchase_order(supplier="_Test Supplier", transaction_date="2026-06-01")
 		create_purchase_order(supplier="_Test Supplier 1", transaction_date="2026-06-01")
 
 		suppliers = {row["supplier"] for row in self.run_report(supplier="_Test Supplier")[1]}
