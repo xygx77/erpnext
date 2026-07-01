@@ -56,3 +56,28 @@ class TestIncorrectSerialAndBatchBundle(ERPNextTestSuite):
 			flagged_names.intersection(bundles),
 			msg="Healthy serial/batch bundles should not be flagged as incorrect.",
 		)
+
+	def test_unlinked_bundle_is_flagged(self):
+		# an actual incorrect state: a submitted Serial and Batch Bundle left without any linking
+		# Stock Ledger Entry (e.g. the SLE was purged but the bundle survived)
+		batch_item = make_item(
+			properties={
+				"is_stock_item": 1,
+				"has_batch_no": 1,
+				"create_new_batch": 1,
+				"batch_number_series": "ISBB-ORPHAN-.#####",
+			}
+		).name
+
+		entry = make_stock_entry(
+			item_code=batch_item, qty=5, rate=100, to_warehouse="Stores - _TC", posting_date="2026-06-01"
+		)
+		bundle = frappe.db.get_value("Serial and Batch Bundle", {"voucher_no": entry.name}, "name")
+		self.assertTrue(bundle)
+
+		# orphan the bundle: drop the Stock Ledger Entry that referenced it
+		frappe.db.delete("Stock Ledger Entry", {"serial_and_batch_bundle": bundle})
+
+		flagged = {row.get("name"): row for row in self.run_report()}
+		self.assertIn(bundle, flagged)
+		self.assertEqual(flagged[bundle]["is_cancelled"], 0)
