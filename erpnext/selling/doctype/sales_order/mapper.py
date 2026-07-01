@@ -26,7 +26,7 @@ from erpnext.stock.doctype.stock_reservation_entry.stock_reservation_entry impor
 	get_sre_reserved_qty_details_for_voucher,
 	get_ssb_bundle_for_voucher,
 )
-from erpnext.stock.get_item_details import ItemDetailsCtx, get_bin_details, get_price_list_rate
+from erpnext.stock.get_item_details import get_bin_details, get_price_list_rate
 
 
 def get_requested_item_qty(sales_order: str) -> dict:
@@ -105,7 +105,7 @@ def make_material_request(source_name: str, target_doc: str | Document | None = 
 			target.item_code, target.warehouse, source_parent.company, True
 		).get("actual_qty", 0)
 
-		ctx = ItemDetailsCtx(target.as_dict().copy())
+		ctx = frappe._dict(target.as_dict().copy())
 		ctx.update(
 			{
 				"company": source_parent.get("company"),

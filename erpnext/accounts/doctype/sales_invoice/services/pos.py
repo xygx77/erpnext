@@ -126,13 +126,13 @@ class POSService:
 		doc.update_stock = 0 if dn_flag else cint(pos.get("update_stock"))
 
 	def _apply_pos_item_defaults(self, pos, for_validate: bool) -> None:
-		from erpnext.stock.get_item_details import ItemDetailsCtx, get_pos_profile_item_details_
+		from erpnext.stock.get_item_details import get_pos_profile_item_details_
 
 		for item in self.doc.get("items"):
 			if not item.get("item_code"):
 				continue
 			profile_details = get_pos_profile_item_details_(
-				ItemDetailsCtx(item.as_dict()), pos, pos, update_data=True
+				frappe._dict(item.as_dict()), pos, pos, update_data=True
 			)
 			for fname, val in profile_details.items():
 				if (not for_validate) or (for_validate and not item.get(fname)):

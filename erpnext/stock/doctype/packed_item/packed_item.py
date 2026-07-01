@@ -12,7 +12,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
 
-from erpnext.stock.get_item_details import ItemDetailsCtx, get_item_details, get_price_list_rate
+from erpnext.stock.get_item_details import get_item_details, get_price_list_rate
 
 
 class PackedItem(Document):
@@ -344,7 +344,7 @@ def update_packed_item_price_data(pi_row, item_data, doc):
 		return
 
 	item_doc = frappe.get_cached_doc("Item", pi_row.item_code)
-	ctx = ItemDetailsCtx(pi_row.as_dict().copy())
+	ctx = frappe._dict(pi_row.as_dict().copy())
 	ctx.update(
 		{
 			"company": doc.get("company"),
@@ -442,7 +442,7 @@ def get_items_from_product_bundle(row: str | dict):
 	"""
 	from erpnext.selling.doctype.product_bundle.product_bundle import get_active_product_bundle
 
-	row, items = ItemDetailsCtx(frappe.parse_json(row)), []
+	row, items = frappe._dict(frappe.parse_json(row)), []
 
 	if bundle_name := row.get("product_bundle"):
 		frappe.has_permission("Product Bundle", "read", bundle_name, throw=True)
