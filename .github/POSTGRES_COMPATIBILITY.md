@@ -177,6 +177,16 @@ These are auto-handled by the framework and are **not** breaks:
   frappe#40075). Such a handler must wrap the fallible insert in `frappe.db.savepoint(name)` +
   `rollback(save_point=name)` — unless it re-`throw`s with no DB call before the throw, or the
   insert uses `ignore_if_duplicate=True` / `autoname="hash"` (→ `ON CONFLICT DO NOTHING`).
+- **Recover the txn with a *scoped* savepoint, not a full `frappe.db.rollback()`, if any prior work
+  must survive.** A full rollback un-poisons the txn but also discards every row the handler committed
+  *before* the failure — which MariaDB kept (it has no statement-abort), so it's a **silent MariaDB
+  regression**. **"The background job / whitelist entrypoint owns the txn" does NOT make a full rollback
+  safe** if it did multiple inserts in a loop first — it drops the partial results MariaDB retained. A
+  full rollback is safe only when it (a) immediately re-`throw`s/`raise`s (MariaDB rolls back anyway),
+  (b) has nothing successful before it (a single op), or (c) the batch is genuinely meant to be
+  **atomic** (a partial result is an invalid state → rollback + mark *Failed* is correct). Otherwise use
+  a **per-iteration / per-record savepoint** — and keep the function's success/`None` return contract:
+  do **not** return the doc when the savepoint was rolled back.
 
 ---
 
