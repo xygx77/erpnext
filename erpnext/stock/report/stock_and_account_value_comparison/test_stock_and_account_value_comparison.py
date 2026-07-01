@@ -67,7 +67,8 @@ class TestStockAndAccountValueComparison(ERPNextTestSuite):
 
 		rows = self.run_report(account=account)
 
-		row = next(r for r in rows if r["voucher_no"] == receipt.name)
+		row = next((r for r in rows if r["voucher_no"] == receipt.name), None)
+		self.assertIsNotNone(row, "Tampered GL entry should cause the voucher to appear in the report")
 		self.assertEqual(row["ledger_type"], "Stock Ledger Entry")
 		self.assertEqual(row["stock_value"], 1000)  # unchanged stock ledger value
 		self.assertEqual(row["account_value"], 600)  # tampered GL value
