@@ -172,7 +172,7 @@ def make_address(args, is_primary_address=1, is_shipping_address=1):
 	if reqd_fields:
 		msg = _("Following fields are mandatory to create address:")
 		frappe.throw(
-			"{} <br><br> <ul>{}</ul>".format(msg, "\n".join(reqd_fields)),
+			msg + " <br><br> <ul>{}</ul>".format("\n".join(reqd_fields)),
 			title=_("Missing Values Required"),
 		)
 

@@ -25,7 +25,7 @@ from erpnext.stock.doctype.item.item import (
 	validate_is_stock_item,
 )
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
-from erpnext.stock.get_item_details import ItemDetailsCtx, get_item_details
+from erpnext.stock.get_item_details import get_item_details
 from erpnext.tests.utils import ERPNextTestSuite
 
 
@@ -158,7 +158,7 @@ class TestItem(ERPNextTestSuite):
 		currency = frappe.get_cached_value("Company", company, "default_currency")
 
 		details = get_item_details(
-			ItemDetailsCtx(
+			frappe._dict(
 				{
 					"item_code": "_Test Item",
 					"company": company,
@@ -188,7 +188,7 @@ class TestItem(ERPNextTestSuite):
 		create_fixed_asset_item()
 
 		details = get_item_details(
-			ItemDetailsCtx(
+			frappe._dict(
 				{
 					"item_code": "Macbook Pro",
 					"company": "_Test Company",
@@ -201,7 +201,7 @@ class TestItem(ERPNextTestSuite):
 
 		frappe.db.set_value("Asset Category", "Computers", "enable_cwip_accounting", "1")
 		details = get_item_details(
-			ItemDetailsCtx(
+			frappe._dict(
 				{
 					"item_code": "Macbook Pro",
 					"company": "_Test Company",
@@ -291,7 +291,7 @@ class TestItem(ERPNextTestSuite):
 
 		for data in expected_item_tax_template:
 			details = get_item_details(
-				ItemDetailsCtx(
+				frappe._dict(
 					{
 						"item_code": data["item_code"],
 						"tax_category": data["tax_category"],
@@ -343,7 +343,7 @@ class TestItem(ERPNextTestSuite):
 			"cost_center": "_Test Cost Center 2 - _TC",  # from item group
 		}
 		sales_item_details = get_item_details(
-			ItemDetailsCtx(
+			frappe._dict(
 				{
 					"item_code": "Test Item With Defaults",
 					"company": "_Test Company",
@@ -368,7 +368,7 @@ class TestItem(ERPNextTestSuite):
 			"cost_center": "_Test Write Off Cost Center - _TC",  # from item
 		}
 		purchase_item_details = get_item_details(
-			ItemDetailsCtx(
+			frappe._dict(
 				{
 					"item_code": "Test Item With Defaults",
 					"company": "_Test Company",

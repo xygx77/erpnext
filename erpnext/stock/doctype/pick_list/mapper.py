@@ -286,7 +286,7 @@ def create_stock_entry(pick_list: str | dict):
 	validate_item_locations(pick_list)
 
 	if stock_entry_exists(pick_list.get("name")):
-		return frappe.msgprint(_("Stock Entry has been already created against this Pick List"))
+		return frappe.msgprint(_("Stock Entry has already been created against this Pick List"))
 
 	stock_entry = frappe.new_doc("Stock Entry")
 	stock_entry.pick_list = pick_list.get("name")

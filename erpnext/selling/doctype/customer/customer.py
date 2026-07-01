@@ -158,7 +158,7 @@ class Customer(TransactionBase):
 			new_customer_name = f"{self.customer_name} - {cstr(count)}"
 
 			msgprint(
-				_("Changed customer name to '{}' as '{}' already exists.").format(
+				_("Changed customer name to '{0}' as '{1}' already exists.").format(
 					new_customer_name, self.customer_name
 				),
 				title=_("Note"),
@@ -356,7 +356,7 @@ class Customer(TransactionBase):
 		if frappe.db.exists("Customer Group", self.name):
 			frappe.throw(
 				_(
-					"A Customer Group exists with same name please change the Customer name or rename the Customer Group"
+					"A Customer Group exists with the same name. Please change the Customer name or rename the Customer Group"
 				),
 				frappe.NameError,
 			)
@@ -406,7 +406,7 @@ class Customer(TransactionBase):
 			if flt(limit.credit_limit) < outstanding_amt:
 				frappe.throw(
 					_(
-						"""New credit limit is less than current outstanding amount for the customer. Credit limit has to be atleast {0}"""
+						"""New credit limit is less than current outstanding amount for the customer. Credit limit has to be at least {0}"""
 					).format(outstanding_amt)
 				)
 
@@ -440,7 +440,7 @@ class Customer(TransactionBase):
 			self.loyalty_program = loyalty_program[0]
 		else:
 			frappe.msgprint(
-				_("Multiple Loyalty Programs found for Customer {}. Please select manually.").format(
+				_("Multiple Loyalty Programs found for Customer {0}. Please select manually.").format(
 					frappe.bold(self.customer_name)
 				)
 			)

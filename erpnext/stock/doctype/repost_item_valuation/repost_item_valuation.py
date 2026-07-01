@@ -94,7 +94,7 @@ class RepostItemValuation(Document):
 		self.validate_recreate_stock_ledgers()
 
 	def set_default_posting_time(self):
-		if not self.posting_time:
+		if self.posting_time is None:
 			self.posting_time = nowtime()
 
 		if not self.posting_date:
@@ -209,7 +209,7 @@ class RepostItemValuation(Document):
 			):
 				frappe.msgprint(_("Caution: This might alter frozen accounts."))
 				return
-			frappe.throw(_("You cannot repost item valuation before {}").format(acc_frozen_till_date))
+			frappe.throw(_("You cannot repost item valuation before {0}").format(acc_frozen_till_date))
 
 	def reset_field_values(self):
 		if self.based_on == "Transaction":
@@ -779,6 +779,7 @@ def make_reposting_for_accounting_ledgers(transactions, company, repost_doc):
 		if reposting_map.get((voucher_type, voucher_no)):
 			continue
 
+		frappe.db.savepoint("repost_accounting_ledger")
 		try:
 			new_repost_doc = frappe.new_doc("Repost Item Valuation")
 			new_repost_doc.company = company
@@ -789,7 +790,7 @@ def make_reposting_for_accounting_ledgers(transactions, company, repost_doc):
 			new_repost_doc.flags.ignore_permissions = True
 			new_repost_doc.submit()
 		except Exception:
-			pass
+			frappe.db.rollback(save_point="repost_accounting_ledger")
 
 
 def get_existing_reposting_only_gl_entries(reposting_reference):

@@ -28,7 +28,6 @@ from erpnext.manufacturing.doctype.bom.bom import (
 from erpnext.setup.doctype.brand.brand import get_brand_defaults
 from erpnext.setup.doctype.item_group.item_group import get_item_group_defaults
 from erpnext.stock.get_item_details import (
-	ItemDetailsCtx,
 	get_barcode_data,
 	get_bin_details,
 	get_conversion_factor,
@@ -404,12 +403,11 @@ class StockEntry(StockController, SubcontractingInwardController):
 			if row.job_card_item or not row.s_warehouse:
 				continue
 
-			msg = f"""Row #{row.idx}: The job card item reference
-				is missing. Kindly create the stock entry
-				from the job card. If you have added the row manually
-				then you won't be able to add job card item reference."""
-
-			frappe.throw(_(msg))
+			frappe.throw(
+				_(
+					"Row #{0}: The job card item reference is missing. Kindly create the stock entry from the job card. If you have added the row manually then you won't be able to add job card item reference."
+				).format(row.idx)
+			)
 
 	def validate_work_order_status(self):
 		pro_doc = frappe.get_doc("Work Order", self.work_order)
@@ -885,7 +883,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 
 		if not finished_items:
 			frappe.throw(
-				msg=_("There must be atleast 1 Finished Good in this Stock Entry").format(self.name),
+				msg=_("There must be at least 1 Finished Good in this Stock Entry").format(self.name),
 				title=_("Missing Finished Good"),
 				exc=FinishedGoodError,
 			)
@@ -908,7 +906,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 			# No work order could mean independent Manufacture entry, if so skip validation
 			if self.work_order and self.fg_completed_qty > allowed_qty:
 				frappe.throw(
-					_("For quantity {0} should not be greater than allowed quantity {1}").format(
+					_("Quantity {0} should not be greater than allowed quantity {1}").format(
 						flt(self.fg_completed_qty), allowed_qty
 					)
 				)
@@ -1190,7 +1188,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 		return reserved_work_orders
 
 	@frappe.whitelist()
-	def get_item_details(self, args: ItemDetailsCtx | None = None, for_update: bool = False):
+	def get_item_details(self, args: frappe._dict | None = None, for_update: bool = False):
 		item = self._fetch_item_data(args)
 		item_group_defaults = get_item_group_defaults(item.name, self.company)
 		brand_defaults = get_brand_defaults(item.name, self.company)
@@ -1373,7 +1371,8 @@ class StockEntry(StockController, SubcontractingInwardController):
 					self.process_loss_qty = flt(process_loss_qty, precision)
 
 					frappe.msgprint(
-						_("The Process Loss Qty has reset as per job cards Process Loss Qty"), alert=True
+						_("The Process Loss Qty has been reset as per the job card's Process Loss Qty"),
+						alert=True,
 					)
 
 		if not self.process_loss_percentage and not self.process_loss_qty:

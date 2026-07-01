@@ -144,7 +144,7 @@ class Task(NestedSet):
 				if frappe.db.get_value("Task", d.task, "status") not in ("Completed", "Cancelled"):
 					frappe.throw(
 						_(
-							"Cannot complete task {0} as its dependant task {1} are not completed / cancelled."
+							"Cannot complete task {0} as its dependent task {1} is not completed / cancelled."
 						).format(frappe.bold(self.name), frappe.bold(d.task))
 					)
 
@@ -316,7 +316,7 @@ class Task(NestedSet):
 
 	def on_trash(self):
 		if check_if_child_exists(self.name):
-			throw(_("Child Task exists for this Task. You can not delete this Task."))
+			throw(_("Child Task exists for this Task. You cannot delete this Task."))
 
 		self.update_nsm_model()
 

@@ -21,7 +21,6 @@ from erpnext.controllers.accounts_controller import (
 from erpnext.deprecation_dumpster import deprecated
 from erpnext.stock.get_item_details import (
 	NOT_APPLICABLE_TAX,
-	ItemDetailsCtx,
 	_get_item_tax_template,
 	get_item_tax_map,
 )
@@ -99,7 +98,7 @@ class calculate_taxes_and_totals:
 		for item in self.doc.items:
 			if item.item_code and item.get("item_tax_template"):
 				item_doc = frappe.get_cached_doc("Item", item.item_code)
-				ctx = ItemDetailsCtx(
+				ctx = frappe._dict(
 					{
 						"net_rate": item.net_rate or item.rate,
 						"base_net_rate": item.base_net_rate or item.base_rate,
@@ -131,9 +130,9 @@ class calculate_taxes_and_totals:
 					if item.item_tax_template not in taxes:
 						item.item_tax_template = taxes[0]
 						frappe.msgprint(
-							_("Row {0}: Item Tax template updated as per validity and rate applied").format(
-								item.idx, frappe.bold(item.item_code)
-							)
+							_(
+								"Row {0}: Item Tax template for {1} updated as per validity and rate applied"
+							).format(item.idx, frappe.bold(item.item_code))
 						)
 
 						# For correct tax_amount calculation re-computation is required
@@ -564,7 +563,7 @@ class calculate_taxes_and_totals:
 				+ "<br>".join(invalid_rows)
 			)
 
-			frappe.throw(_(message))
+			frappe.throw(message)
 
 	def get_tax_amount_if_for_valuation_or_deduction(self, tax_amount, tax):
 		# if just for valuation, do not add the tax amount in total

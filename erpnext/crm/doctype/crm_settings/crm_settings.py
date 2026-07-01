@@ -3,7 +3,7 @@
 
 import frappe
 from frappe import _
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields, delete_custom_fields
+from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.model.document import Document
 
 
@@ -49,7 +49,7 @@ class CRMSettings(Document):
 		if self.enable_frappe_crm_data_synchronization and not self.allowed_users:
 			frappe.throw(
 				_(
-					"Please add atleast one user on Allowed Users to allow Data Synchronization from Frappe CRM site."
+					"Please add at least one user on Allowed Users to allow Data Synchronization from Frappe CRM site."
 				)
 			)
 

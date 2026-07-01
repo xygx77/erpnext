@@ -16,7 +16,7 @@ from frappe.website.website_generator import WebsiteGenerator
 import erpnext
 from erpnext.setup.utils import get_exchange_rate
 from erpnext.stock.doctype.item.item import get_item_details
-from erpnext.stock.get_item_details import ItemDetailsCtx, get_conversion_factor, get_price_list_rate
+from erpnext.stock.get_item_details import get_conversion_factor, get_price_list_rate
 
 form_grid_templates = {"items": "templates/form_grid/item_grid.html"}
 
@@ -1072,7 +1072,7 @@ def _get_price_list_item_rate(args, bom_doc):
 	if not bom_doc.buying_price_list:
 		frappe.throw(_("Please select Price List"))
 
-	ctx = ItemDetailsCtx(
+	ctx = frappe._dict(
 		{
 			"doctype": "BOM",
 			"price_list": bom_doc.buying_price_list,

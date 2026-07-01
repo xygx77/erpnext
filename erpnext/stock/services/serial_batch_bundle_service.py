@@ -496,7 +496,7 @@ class SerialBatchBundleService:
 		if throw_error:
 			frappe.throw(
 				_(
-					"At row {0}: Serial and Batch Bundle {1} has already created. Please remove the values from the serial no or batch no fields."
+					"At row {0}: Serial and Batch Bundle {1} has already been created. Please remove the values from the serial no or batch no fields."
 				).format(row.idx, row.serial_and_batch_bundle)
 			)
 

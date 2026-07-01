@@ -73,7 +73,7 @@ class ExchangeRateRevaluation(Document):
 
 	def validate_mandatory(self):
 		if not (self.company and self.posting_date):
-			frappe.throw(_("Please select Company and Posting Date to getting entries"))
+			frappe.throw(_("Please select Company and Posting Date to get entries"))
 
 	def before_submit(self):
 		self.remove_accounts_without_gain_loss()
@@ -601,6 +601,7 @@ def calculate_exchange_rate_using_last_gle(company, account, party_type, party):
 			.select(gl.voucher_type, gl.voucher_no)
 			.where(Criterion.all(conditions))
 			.orderby(gl.posting_date, order=Order.desc)
+			.orderby(gl.name, order=Order.desc)
 			.limit(1)
 			.run()[0]
 		)
@@ -615,6 +616,7 @@ def calculate_exchange_rate_using_last_gle(company, account, party_type, party):
 				(gl.voucher_type == voucher_type) & (gl.voucher_no == voucher_no) & (gl.account == account)
 			)
 			.orderby(gl.posting_date, order=Order.desc)
+			.orderby(gl.name, order=Order.desc)
 			.limit(1)
 			.run()[0][0]
 		)

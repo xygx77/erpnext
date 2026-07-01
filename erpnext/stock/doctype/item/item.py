@@ -143,7 +143,7 @@ class Item(Document):
 		taxes: DF.Table[ItemTax]
 		total_projected_qty: DF.Float
 		uoms: DF.Table[UOMConversionDetail]
-		valuation_method: DF.Literal["", "FIFO", "Moving Average", "LIFO"]
+		valuation_method: DF.Literal["", "FIFO", "Moving Average", "LIFO", "Standard Cost"]
 		valuation_rate: DF.Currency
 		variant_based_on: DF.Literal["Item Attribute", "Manufacturer"]
 		variant_of: DF.Link | None
@@ -239,6 +239,7 @@ class Item(Document):
 		self.validate_item_defaults()
 		self.validate_auto_reorder_enabled_in_stock_settings()
 		self.cant_change()
+		self.validate_standard_cost_change()
 		self.validate_item_tax_net_rate_range()
 
 		if not self.is_new():
@@ -463,7 +464,7 @@ class Item(Document):
 
 	def validate_item_type(self):
 		if self.has_serial_no == 1 and self.is_stock_item == 0 and not self.is_fixed_asset:
-			frappe.throw(_("'Has Serial No' can not be 'Yes' for non-stock item"))
+			frappe.throw(_("'Has Serial No' cannot be 'Yes' for non-stock item"))
 
 		if self.has_serial_no == 0 and self.serial_no_series:
 			self.serial_no_series = None
@@ -1060,6 +1061,30 @@ class Item(Document):
 			for d in self.attributes:
 				d.variant_of = self.variant_of
 
+	def validate_standard_cost_change(self):
+		"""Once stock exists, an item's valuation method cannot be switched to or from Standard
+		Cost — either change would leave existing stock valued on a basis the ledger never
+		recorded."""
+		if not self.is_standard_cost_valuation_change():
+			return
+
+		if self.stock_ledger_created():
+			frappe.throw(
+				_(
+					"Valuation Method cannot be changed to or from 'Standard Cost' for {0} because stock transactions already exist for it."
+				).format(frappe.bold(self.name))
+			)
+
+	def is_standard_cost_valuation_change(self):
+		"""True if this save switches the valuation method into or out of Standard Cost."""
+		if self.is_new() or not self.has_value_changed("valuation_method"):
+			return False
+
+		previous = self.get_doc_before_save()
+		was_standard = previous and previous.valuation_method == "Standard Cost"
+		is_standard = self.valuation_method == "Standard Cost"
+		return bool(was_standard or is_standard)
+
 	def cant_change(self):
 		if self.is_new():
 			return
@@ -1508,7 +1533,9 @@ def validate_item_default_company_links(item_defaults: list[ItemDefault]) -> Non
 				company = frappe.db.get_value(doctype, item_default.get(field), "company", cache=True)
 				if company and company != item_default.company:
 					frappe.throw(
-						_("Row #{}: {} {} doesn't belong to Company {}. Please select valid {}.").format(
+						_(
+							"Row #{0}: {1} {2} does not belong to Company {3}. Please select valid {4}."
+						).format(
 							item_default.idx,
 							doctype,
 							frappe.bold(item_default.get(field)),
