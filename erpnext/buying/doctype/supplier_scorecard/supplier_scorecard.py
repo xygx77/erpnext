@@ -61,7 +61,10 @@ class SupplierScorecard(Document):
 		if make_all_scorecards(self.name) > 0:
 			# New periods were created; re-save to refresh score and standings.
 			self.flags.in_rescore = True
-			self.save()
+			try:
+				self.save()
+			finally:
+				self.flags.in_rescore = False
 
 	def validate_standings(self):
 		# Standings must form a continuous chain of bands covering 0 to 100 with no gaps or overlaps
