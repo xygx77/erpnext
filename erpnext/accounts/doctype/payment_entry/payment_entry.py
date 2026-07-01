@@ -2795,6 +2795,9 @@ def get_open_payment_requests_for_references(references=None):
 		.where(PR.docstatus == 1)
 		.where(PR.outstanding_amount > 0)  # to avoid old PRs with 0 outstanding amount
 		.orderby(Coalesce(PR.transaction_date, PR.creation), order=frappe.qb.asc)
+		# unique tiebreaker so PRs sharing a transaction_date allocate in the same order on both engines
+		.orderby(PR.creation, order=frappe.qb.asc)
+		.orderby(PR.name, order=frappe.qb.asc)
 	).run(as_dict=True)
 
 	if not response:
